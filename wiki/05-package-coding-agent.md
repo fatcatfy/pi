@@ -95,6 +95,32 @@ packages/coding-agent/src/
 7. **主题初始化** `initTheme`；诊断报告（扩展加载失败、设置问题）；
 8. **模式分发**：`runRpcMode(runtime)` / `new InteractiveMode(runtime).run()` / `runPrintMode(runtime, …)`。
 
+### 3.1 启动流程图
+
+```mermaid
+flowchart TD
+    BIN(["cli.ts（bin 入口）"]) --> MAIN["main(argv)"]
+    MAIN --> CMD{"命令分流"}
+    CMD -- "pi auth / update / config / package" --> SUBCMD(["对应处理器后退出"])
+    CMD -- "experimental server / client" --> EXP(["实验多进程架构"])
+    CMD -- "默认代理运行" --> PARSE["parseArgs"]
+    PARSE --> FAST{"--version / --help /<br/>--list-models / --export?"}
+    FAST -- 是 --> FASTEXIT(["快速路径输出后退出"])
+    FAST -- 否 --> MIG["runMigrations 配置迁移"]
+    MIG --> SESS["createSessionManager<br/>--session / --resume / --continue / --fork / --no-session"]
+    SESS --> RT["createRuntime（cwd 变化可重建）"]
+    RT --> ST["SettingsManager.create(cwd, agentDir)"]
+    ST --> SVC["createAgentSessionServices<br/>ModelRuntime + ResourceLoader<br/>（扩展 / skills / 模板 / 主题 / context files）"]
+    SVC --> MODEL["resolveModelScope + buildSessionOptions"]
+    MODEL --> AS["createAgentSessionFromServices → AgentSession"]
+    AS --> THEME["initTheme + 启动诊断"]
+    THEME --> MODE{"resolveAppMode"}
+    MODE -- "TTY 默认" --> INTER(["InteractiveMode.run()"])
+    MODE -- "--print 或非 TTY" --> PRINT(["runPrintMode"])
+    MODE -- "--mode json" --> JSONOUT(["JSON 事件流输出"])
+    MODE -- "--mode rpc" --> RPC(["runRpcMode"])
+```
+
 ## 4. 核心模块说明
 
 ### 4.1 AgentSession（`core/agent-session.ts`）
@@ -149,6 +175,33 @@ packages/coding-agent/src/
 - **系统提示注入**（`buildSystemPrompt`）、模型/provider 注册、键绑定、bash spawn 钩子、剪贴板等
 
 `loader.ts` 负责发现与加载（含信任门控与错误隔离），`runner.ts` 管理扩展生命周期与事件分发，`wrapper.ts` 提供 `InlineExtension` 内联包装。内置扩展示例：`extensions/llama/`（llama.cpp 本地模型支持）。
+
+### 6.1 扩展系统架构图
+
+```mermaid
+graph TD
+    subgraph Sources["发现来源（ResourceLoader）"]
+        GLOBAL["全局 ~/.pi/agent/extensions"]
+        PROJECT["项目 .pi/extensions<br/>（trust-manager 信任门控）"]
+        PKG["pi packages（npm / git 分发）"]
+    end
+    LOADER["loader.ts<br/>发现 + jiti 即时编译 + 错误隔离"]
+    RUNNER["runner.ts<br/>扩展生命周期与事件分发"]
+    subgraph API["ExtensionAPI 能力"]
+        TOOLS["自定义工具 / slash 命令 / CLI 旗标"]
+        EVENTS["事件订阅 subscribe()"]
+        UIEXT["UI 原语：select / confirm / input /<br/>widget / footer / 自定义编辑器"]
+        PROMPT["系统提示注入 buildSystemPrompt"]
+        PROV["模型 / provider 注册"]
+        HOOKS["键绑定 / bash spawn 钩子 / 剪贴板"]
+    end
+    SESSION["AgentSession（core/agent-session.ts）"]
+
+    GLOBAL & PROJECT & PKG --> LOADER
+    LOADER --> RUNNER
+    RUNNER --> API
+    API --> SESSION
+```
 
 ## 7. 运行模式
 

@@ -132,6 +132,47 @@ Provider 工厂文件模式（以 `src/providers/anthropic.ts` 为例）：声�
 
 `agent` 包的 `StreamFn` 抽象正是由 `Models.streamSimple` 满足。
 
+### 4.3 架构图（Mermaid）
+
+```mermaid
+graph TD
+    subgraph Consumers["消费方"]
+        RUNTIME["pi-coding-agent<br/>ModelRuntime"]
+        STREAMFN["pi-agent-core<br/>StreamFn"]
+    end
+
+    MODELS["Models 运行时集合<br/>getAuth / checkAuth / refresh / streamSimple"]
+
+    subgraph Providers["Provider 工厂（providers/*.ts，30+）"]
+        ANTHROPIC["anthropic"]
+        OPENAI["openai"]
+        GOOGLE["google"]
+        MORE["azure / bedrock / mistral /<br/>openrouter / xiaomi / …"]
+    end
+
+    subgraph Adapters["API 适配层（api/*.ts，按 wire 协议 lazy 加载）"]
+        A1["anthropic-messages"]
+        A2["openai-responses /<br/>openai-completions"]
+        A3["google-generative-ai /<br/>google-vertex"]
+        A4["bedrock-converse-stream /<br/>mistral-conversations / …"]
+    end
+
+    AUTH["认证解析链（auth/）<br/>显式传入 → 环境变量 → CredentialStore → OAuth 刷新"]
+    CREDS[("CredentialStore<br/>auth.json / models.json")]
+    STREAM["AssistantMessageEventStream<br/>统一流式事件协议"]
+
+    RUNTIME --> MODELS
+    STREAMFN --> MODELS
+    MODELS --> AUTH
+    AUTH --> CREDS
+    MODELS --> ANTHROPIC & OPENAI & GOOGLE & MORE
+    ANTHROPIC --> A1
+    OPENAI --> A2
+    GOOGLE --> A3
+    MORE --> A4
+    A1 & A2 & A3 & A4 --> STREAM
+```
+
 ## 5. API 适配层（`src/api/`）
 
 每个模块负责一种 wire 协议：
@@ -143,6 +184,41 @@ Provider 工厂文件模式（以 `src/providers/anthropic.ts` 为例）：声�
 **懒加载机制**：每个 API 模块有配套 `<name>.lazy.ts`，通过 `lazy.ts` 的 `lazyApi()` 在首次调用时才 `import()` 真实 SDK（如 `@anthropic-ai/sdk`、`openai`、`@google/genai`），保证根入口加载轻量（有 `lazy-module-load.test.ts` 保障）。
 
 跨 API 消息转换（如 Copilot 的 OpenAI 格式 → Anthropic 格式）由 `api/transform-messages.ts` 处理。
+
+### 5.1 streamSimple 调用时序图
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant App as 调用方（agent / SDK）
+    participant M as Models
+    participant Auth as 认证解析（auth/）
+    participant P as Provider 工厂
+    participant Adp as API 适配器（lazy）
+    participant SDK as Provider SDK
+    participant Cloud as Provider 云端
+
+    App->>M: streamSimple(model, context, options)
+    M->>Auth: resolveProviderAuth(provider)
+    alt 凭据缺失 / OAuth 过期
+        Auth-->>M: ModelsError(auth / oauth)
+        M-->>App: 流内错误帧（stopReason = error）
+    else 凭据有效
+        Auth-->>M: Credential（API key / OAuth token）
+        M->>P: 委托 provider.streamSimple
+        P->>Adp: 绑定的 api 模块（首次调用才 import SDK）
+        Adp->>SDK: 初始化客户端
+        Adp->>SDK: 统一消息 → 原生格式，发起流式请求
+        SDK->>Cloud: HTTP + SSE / WebSocket
+        loop 流式响应
+            Cloud-->>SDK: 原生 chunk
+            SDK-->>Adp: 原生事件
+            Adp-->>App: AssistantMessageEvent（text_delta / thinking_delta / toolCall / usage…）
+        end
+        Cloud-->>Adp: 流结束
+        Adp-->>App: 终帧（stopReason = stop / toolUse / length）
+    end
+```
 
 ## 6. 认证体系（`src/auth/` + `src/oauth.ts`）
 

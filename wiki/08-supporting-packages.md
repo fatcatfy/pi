@@ -252,6 +252,32 @@ const result = await run([
 - `promptAgent()`：驱动 `session.prompt()`，校验以 `stopReason === "stop"` 结束且产出非空文本，否则抛错；
 - 会话 JSONL 在删除临时工作区前被快照，经 eval 专用 `afterEach` 钩子注册到显式的 Vitest 测试任务（在 reporter 运行前）。
 
+#### 单次 eval 运行时序图
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Runner as run-evals.mjs
+    participant VE as vitest-evals
+    participant H as createPiCodingAgentHarness
+    participant Sess as AgentSession（隔离临时目录）
+    participant Model as 真实模型
+
+    Runner->>Runner: 解析 --provider / --model 或 PI_* 环境变量
+    Runner->>VE: 启动 Vitest
+    VE->>H: run(input)
+    H->>H: mkdtemp 隔离项目 / agent 目录
+    H->>Sess: createAgentSessionFromServices 组装真实会话
+    H->>Model: session.prompt(...)（真实调用）
+    Model-->>Sess: 响应 + 工具调用
+    Sess-->>H: 校验 stopReason = stop 且非空输出
+    H->>H: output() 变换为 JSON 安全结果
+    H->>H: 快照会话 JSONL 到 .eval/sessions/
+    H-->>VE: 结果 + TranscriptEvent[]
+    VE->>VE: judge 评分（judgeThreshold = null，不阻断测试）
+    VE-->>Runner: 报告 lift / 配对差值 → runs.jsonl
+```
+
 ### 3.4 比较型评估：evalHarnessTable
 
 用 `evalHarnessTable(...)` + Vitest 原生 `describe.for(...)` 让相同输入跑在多个 harness 上（可按 prompt、工具、skills、模型等任意维度差异）：

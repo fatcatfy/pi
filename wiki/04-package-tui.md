@@ -75,6 +75,64 @@ interface Component {
 
 容器组件（`Box`、`VStack`、`HStack`、`Stack`）负责子组件排列、padding、背景与鼠标事件转发。
 
+### 3.4 渲染管线与输入循环（Mermaid）
+
+```mermaid
+graph LR
+    subgraph Input["输入"]
+        STDIN["stdin 原始字节"]
+        KEYS["keys.ts<br/>转义序列 → KeyId"]
+        MOUSE["鼠标事件规范化<br/>（cell 坐标）"]
+    end
+    subgraph Core["TUI 核心（tui.ts）"]
+        FOCUS["焦点管理 / Overlay /<br/>输入监听分发"]
+        RR["requestRender()<br/>合并重绘请求"]
+        DIFF["差分渲染<br/>仅输出与上一帧差异"]
+    end
+    subgraph Tree["组件树"]
+        CONT["容器：Box / VStack / HStack / Stack"]
+        LEAF["组件：Editor / Markdown /<br/>SelectList / ScrollView / …"]
+    end
+    subgraph LayoutEngine["布局引擎（layout.ts）"]
+        CACHE["renderCached<br/>组件 + 宽度缓存"]
+        PAINT["renderLayoutFrame →<br/>layoutComponent → paintBox"]
+    end
+    STDOUT["stdout（ANSI 行）"]
+
+    STDIN --> KEYS
+    KEYS --> FOCUS
+    MOUSE --> FOCUS
+    CONT --> LEAF
+    FOCUS --> LEAF
+    FOCUS --> RR
+    RR --> CACHE
+    LEAF --> CACHE
+    CACHE --> PAINT
+    PAINT --> DIFF
+    DIFF --> STDOUT
+```
+
+单次输入到渲染的时序：
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Term as 终端
+    participant T as TUI（tui.ts）
+    participant Focus as 焦点组件（Editor）
+    participant Tree as 聊天组件树
+    participant L as 布局引擎
+
+    Term->>T: stdin 原始字节
+    T->>T: keys.ts 解析按键 / 鼠标事件规范化
+    T->>Focus: handleInput(data)（可消费/改写）
+    Focus->>T: invalidate() + requestRender()
+    T->>Tree: render(width)（命中 renderCached 缓存则复用）
+    Tree-->>T: ANSI 行数组（含 CURSOR_MARKER 光标标记）
+    T->>L: paintBox 合成最终帧
+    L-->>Term: 仅写出与上一帧的差异行
+```
+
 ## 4. 主要组件一览
 
 | 组件 | 说明 |

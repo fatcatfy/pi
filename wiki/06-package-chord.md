@@ -53,6 +53,35 @@ packages/chord/src/
 
 要求：跨边界的参数、结果、快照、更新、目录必须是 strict JSON（`JsonRepresentation<T>` 派生 wire 安全类型，`isJsonValue()` 在适配器边界校验）；chord 不规定 framing、路由、传输或外层信封（那由 pi-protocol 提供）。
 
+### 4.1 远程服务订阅时序图
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as 消费端（client / TUI / WebUI）
+    participant B as createRemoteServiceBinding
+    participant W as service wire（经 pi-protocol 传输）
+    participant H as FacetHost（server 进程）
+    participant S as 权威状态服务
+
+    C->>B: 订阅 service token
+    B->>W: createServiceSubscribeCall()
+    W->>H: chord.service 控制调用（subscribe）
+    H->>S: 绑定服务，创建 state encoder
+    S-->>H: publish() 首次完整快照
+    H-->>C: provider 快照（strict JSON）
+    Note over C: 安装绑定后 start()，<br/>释放水化期间缓冲的更新
+    loop 状态更新
+        S->>S: 修改 state 代理 + publish()
+        S->>H: flush Delta 操作批次
+        H->>H: track → 路径增量（字符串 append / 前截断等）
+        H-->>C: 增量更新
+        C->>C: decoder apply → 新快照
+    end
+    C->>W: createServiceUnsubscribeCall()
+    W-->>C: 每订阅状态重置（断连 / 重水化同样重置）
+```
+
 ## 5. Delta 追踪（`delta/`）
 
 ```ts
@@ -72,6 +101,39 @@ const replica = apply({}, ops);
 - **打包**（`bundler.ts` + `@earendil-works/chord/bundler`）：读取插件 `package.json` 的 `chord.facets` 配置（可覆盖/禁用默认 facet 路径），用 esbuild 编译为**内容寻址的 CommonJS 文件**（每入口一个 `.cjs` + `chord-facets.json` 清单）；peer dependencies 外置，由宿主解析。chord 绝不安装依赖或运行包生命周期脚本。
 - **加载**（`node.ts` + `@earendil-works/chord/node`）：`createFacetBundleLoader()` 校验 SHA-256 完整性后用 `node:vm` 直接编译 CommonJS 体（不进入 Node 模块缓存）；`load()` → `FacetHost.reload()` 热重载：候选验证通过后逐个替换单例，旧代 dispose，服务句柄不断连。
 - **传输**：`readFacetBundleArtifact()` 打包单个验证过的清单条目及其源；`createFacetBundleArtifactLoader()` 在接收端物化临时代。
+
+### 6.1 Facet 打包、加载与服务组合图
+
+```mermaid
+graph TD
+    subgraph DevTime["开发态"]
+        PKG["插件 package.json<br/>chord.facets 声明（backend / tui / browser）"]
+        BUNDLE["bundler.ts（esbuild）<br/>内容寻址 .cjs + chord-facets.json 清单 + SHA-256"]
+    end
+    subgraph Host["宿主进程（FacetHost）"]
+        LOADER["createFacetBundleLoader()<br/>vm 编译加载（不进 Node 模块缓存）"]
+        HOST["createFacetHost()<br/>依赖图校验 → 服务绑定 → 按依赖序激活 → reload() 热重载"]
+        subgraph Services["Services"]
+            SINGLE["singleton（单提供者）"]
+            KEYED["keyed（动态键实例）"]
+        end
+        REPLICATED["replicatedState()<br/>state 代理 + publish()"]
+        CODEC["state-codec<br/>快照 + Delta 增量（独立路径字典）"]
+    end
+    subgraph Remote["消费端（另一进程）"]
+        BINDING["createRemoteServiceBinding()"]
+        REPLICA["本地副本（decoder apply）"]
+    end
+
+    PKG --> BUNDLE
+    BUNDLE -- "打包 / 传输（peer deps 外置）" --> LOADER
+    LOADER --> HOST
+    HOST --> SINGLE & KEYED
+    SINGLE & KEYED --> REPLICATED
+    REPLICATED --> CODEC
+    CODEC -- "catalogue / subscribe + 快照 + 增量" --> BINDING
+    BINDING --> REPLICA
+```
 
 ## 7. 在 Pi 中的使用
 

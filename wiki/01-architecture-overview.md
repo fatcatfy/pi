@@ -32,6 +32,51 @@
 
 - **RPC 协议栈（protocol/client/server）与 chord 组合**支撑实验性的"一个 Session、多个呈现端"架构（本地 server 进程 + TUI/WebUI 客户端）。
 
+### 1.1 分层依赖图（Mermaid）
+
+```mermaid
+graph TD
+    subgraph APP["应用层（用户入口）"]
+        CLI["pi-coding-agent（pi CLI）<br/>交互 / 打印 / JSON / RPC"]
+        EVALS["pi-evals（私有）<br/>评估框架"]
+    end
+
+    subgraph RUNTIME["Agent 运行时层"]
+        AGENTCORE["pi-agent-core<br/>Agent / AgentLoop / AgentHarness<br/>Session（分支、压缩、JSONL）"]
+    end
+
+    subgraph BASE["基础能力层"]
+        AI["pi-ai<br/>统一 LLM API、Provider、认证"]
+        TUI["pi-tui<br/>终端 UI、差分渲染"]
+        TELEMETRY["pi-telemetry<br/>遥测契约"]
+    end
+
+    subgraph SVC["服务 / 协议层（实验）"]
+        CHORD["chord<br/>组合运行时"]
+        PROTOCOL["pi-protocol<br/>CBOR 协议"]
+        CLIENT["pi-client"]
+        SERVER["pi-server"]
+        SQLITE["sqlite-node<br/>会话后端"]
+    end
+
+    CLI --> AGENTCORE
+    CLI --> TUI
+    CLI --> CHORD
+    CLI --> CLIENT
+    EVALS -.->|devDependencies| CLI
+    EVALS -.-> AI
+    AGENTCORE --> AI
+    AGENTCORE --> CHORD
+    AGENTCORE --> TELEMETRY
+    AI --> TELEMETRY
+    PROTOCOL --> CHORD
+    CLIENT --> PROTOCOL
+    SERVER --> PROTOCOL
+    SERVER --> AGENTCORE
+    SQLITE --> AGENTCORE
+    SQLITE --> AI
+```
+
 ## 2. 核心数据流：一次用户提示的完整路径
 
 以交互模式下用户输入一条消息为例：
@@ -65,6 +110,53 @@ AssistantMessageEventStream → AgentEvent 事件流逐层向上广播
    │  toolCall → AgentTool.execute()（read/bash/edit/write/grep/find/ls…）
    ▼
 TUI 组件树响应事件增量渲染（chat-viewport、assistant-message、tool-execution）
+```
+
+### 2.1 一次提示的完整时序图
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant User as 用户
+    participant Editor as TUI 编辑器（pi-tui）
+    participant IM as InteractiveMode
+    participant AS as AgentSession（coding-agent）
+    participant AG as Agent（pi-agent-core）
+    participant AL as agentLoop
+    participant SS as streamSimple（pi-ai Models）
+    participant ADP as API 适配器
+    participant LLM as Provider HTTP API
+    participant Tool as AgentTool（read / bash / edit / write…）
+
+    User->>Editor: 输入消息并提交
+    Editor->>IM: 提交输入
+    IM->>AS: session.prompt(text)
+    AS->>AG: agent.prompt(input)
+    AG->>AL: runAgentLoop(prompts, context, config)
+
+    loop 每一轮（turn）
+        AL->>AL: transformContext → convertToLlm
+        AL->>SS: streamFn(model, context, options)
+        SS->>ADP: 按 model.api 分发（lazy 加载 SDK）
+        ADP->>LLM: 统一消息 → 原生格式，发起流式请求
+        LLM-->>ADP: SSE / WebSocket chunk
+        ADP-->>AL: AssistantMessageEvent（text_delta / toolCall / usage…）
+        AL-->>AG: message_start / update / end 事件
+        AG-->>AS: AgentEvent 广播
+        AS-->>IM: 事件总线
+        IM-->>Editor: TUI 差分渲染增量更新
+
+        alt 消息含 toolCall
+            AL->>Tool: 校验参数 → execute()（可选并行）
+            Tool-->>AL: AgentToolResult
+            AL->>AL: 生成 toolResult 消息 → 下一轮
+        else stopReason 为 stop
+            AL->>AL: shouldStopAfterTurn 决定是否退出
+        end
+    end
+
+    AL-->>AG: agent_end + 本轮新增消息
+    AG-->>AS: 运行完成
 ```
 
 几个关键抽象在数据流中的位置：

@@ -27,6 +27,34 @@
 - **pi-server**：连接/握手/路由服务器（Session 目标路由、多呈现端挂载）
 - **chord**：承载信封内的服务语义（调用语法、目录、快照/增量、错误码）
 
+### 1.1 架构图（Mermaid）
+
+```mermaid
+graph LR
+    subgraph ClientProcess["客户端进程"]
+        CUI["TUI / WebUI / CLI 呈现端"]
+        CLIENT["pi-client<br/>Client / Connection"]
+        TRANSPORT["createClientServiceTransport()<br/>chord 服务绑定"]
+    end
+    subgraph Wire["传输（任意有序字节流）"]
+        SOCK["Unix domain socket<br/>4 字节大端长度前缀 + CBOR 帧（≤16 MiB）"]
+    end
+    subgraph ServerProcess["服务进程"]
+        SERVER["pi-server<br/>Server / ServerListener"]
+        ROUTER["SessionRouter<br/>RoutedServerServiceHost /<br/>RoutedSessionHandle"]
+        SVC["chord services<br/>sessions / models / transcript / …"]
+        WORKER["AgentHarness + Session<br/>（进程本地 / session worker）"]
+    end
+
+    CUI --> CLIENT
+    CLIENT <--> TRANSPORT
+    TRANSPORT <--> SOCK
+    SOCK <--> SERVER
+    SERVER <--> ROUTER
+    ROUTER <--> SVC
+    SVC <--> WORKER
+```
+
 ## 2. pi-protocol（`packages/protocol`）
 
 ### 2.1 消息格式（`src/protocol.ts`）
@@ -75,6 +103,50 @@
 - 连接断开只在其已受理调用结算后释放挂载；服务器关闭关闭所有路由 Session 句柄（释放 worker 与 Session 写所有权）；
 - Session 发现与管理是应用拥有的服务（`SessionDirectory`、`SessionManagement`）；服务器只向 resolver 询问元数据；
 - 服务器/worker 生命周期在公共协议之外：可替换 server 进程拥有私有生命周期协议，实验性 coordinator 只做不透明消息路由。
+
+### 4.3 连接与调用时序图
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Client（pi-client）
+    participant T as ByteTransport（Unix socket）
+    participant S as Server（pi-server）
+    participant SR as SessionRouter
+    participant H as chord services / AgentHarness
+
+    C->>T: connect(serverId, transportFactory)
+    T->>S: 建立 socket 连接
+    C->>S: ClientHello（协议版本）
+    S->>S: 版本校验 + 握手超时控制
+    S-->>C: ServerHello（serverId）
+    C->>C: 验证 serverId 与期望一致
+
+    C->>S: RequestEnvelope（Server 目标）
+    S->>S: 解码帧 → 解析 ServiceCall（chord wire）
+    S->>H: 执行服务调用（strict JSON）
+    H-->>S: 调用结果
+    S-->>C: ResponseEnvelope
+
+    C->>S: 请求 attach Session
+    S->>SR: RoutedSessionHandle.attachClient()
+    SR-->>S: attachmentId（服务器生成，仅作路由控制）
+    S-->>C: 挂载确认
+
+    C->>S: RequestEnvelope（Session 目标 = serverId + sessionId + attachmentId）
+    S->>SR: 校验挂载路由（不解码业务 payload）
+    SR->>H: invokeService() 转发不透明信封
+    H-->>C: ResponseEnvelope
+
+    loop 订阅更新（快照 + 增量）
+        H-->>S: ServiceEventEnvelope
+        S-->>C: 转发（迟到帧按 attachmentId 拒绝）
+    end
+
+    C->>T: close()
+    S->>SR: 断开 → 已受理调用结算后释放挂载
+    Note over SR: 服务器关闭时关闭全部路由 Session 句柄，<br/>释放 worker 与 Session 写所有权
+```
 
 ## 5. 在 pi-coding-agent 中的落地
 

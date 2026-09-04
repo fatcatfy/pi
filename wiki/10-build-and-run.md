@@ -28,6 +28,13 @@ chord → tui → telemetry → ai → agent → session-backends/sqlite-node
       → protocol → client → server → coding-agent
 ```
 
+构建顺序（依赖链）：
+
+```mermaid
+graph LR
+    CHORD["chord"] --> TUI["tui"] --> TELE["telemetry"] --> AI["ai"] --> AGENT["agent"] --> SQL["sqlite-node"] --> PROTO["protocol"] --> CLIENT["client"] --> SERVER["server"] --> CODING["coding-agent"]
+```
+
 常用变体：
 
 | 命令 | 说明 |
@@ -113,6 +120,23 @@ PI_ALLOW_LOCKFILE_CHANGE=1 npm_config_min_release_age=0 npm run release:patch   
 脚本会：升版本 → 更新 changelog → 重建产物 → `npm run check` → 提交 `Release vX.Y.Z` → 打 tag → 补下轮 `[Unreleased]` 段 → 推送 `main` 与 tag。**tag 推送后不要重跑同版本发布脚本**。
 
 4. CI（`.github/workflows/build-binaries.yml`）完成 npm trusted publishing（OIDC，无本地 `npm publish`/OTP），验证全部包可解析到精确版本后把 release 标记写入 R2；`pi.dev/api/latest-version` 只认这个标记。
+
+发布流程图：
+
+```mermaid
+flowchart TD
+    CL["步骤 1：/cl 审计并更新各包 CHANGELOG 的 Unreleased 段"] --> SMOKE["步骤 2：npm run release:local<br/>仓库外隔离安装 + Node / Bun 冒烟"]
+    SMOKE --> REL["步骤 3：release:patch / release:minor<br/>（PI_ALLOW_LOCKFILE_CHANGE=1）"]
+    REL --> BUMP["升版本 + 更新 changelog + 重建产物"]
+    BUMP --> CHECK["npm run check 全量检查"]
+    CHECK --> COMMIT["提交 Release vX.Y.Z + 打 tag"]
+    COMMIT --> NEXT["补下轮 Unreleased 段并提交"]
+    NEXT --> PUSH["推送 main + tag"]
+    PUSH --> CI["步骤 4：CI build-binaries.yml"]
+    CI --> PUB["npm trusted publishing（OIDC，环境 npm-publish）"]
+    PUB --> VERIFY["验证所有公共包解析到精确版本 + tarball 可用"]
+    VERIFY --> MARKER["release 标记写入 R2<br/>（pi.dev/api/latest-version 只认此标记）"]
+```
 
 ## 8. 终端用户使用 `pi`
 

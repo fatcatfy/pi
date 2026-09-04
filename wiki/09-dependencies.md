@@ -49,6 +49,35 @@ npm workspaces 定义在根 [package.json](../package.json)：`packages/*`、`pa
     └──────────┘ └────────────┘ └───────────┘
 ```
 
+### 1.1 依赖图（Mermaid）
+
+```mermaid
+graph TD
+    CHORD["chord"]
+    TELEMETRY["pi-telemetry"]
+    TUI["pi-tui"]
+    AI["pi-ai"] --> TELEMETRY
+    AGENTCORE["pi-agent-core"] --> CHORD
+    AGENTCORE --> AI
+    AGENTCORE --> TELEMETRY
+    PROTOCOL["pi-protocol"] --> CHORD
+    CLIENT["pi-client"] --> CHORD
+    CLIENT --> PROTOCOL
+    SERVER["pi-server"] --> CHORD
+    SERVER --> PROTOCOL
+    SERVER --> AGENTCORE
+    SQLITE["pi-session-backend-sqlite-node"] --> AI
+    SQLITE --> AGENTCORE
+    CLI["pi-coding-agent"] --> CHORD
+    CLI --> AGENTCORE
+    CLI --> AI
+    CLI --> CLIENT
+    CLI --> PROTOCOL
+    CLI --> TUI
+    EVALS["pi-evals（私有，dev）"] -.-> AI
+    EVALS -.-> CLI
+```
+
 要点：
 
 - **三个零内部依赖的基座**：`chord`（应用组合运行时）、`pi-telemetry`（遥测契约）、`pi-tui`（终端 UI）。它们可以被任何上层安全引用。

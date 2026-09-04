@@ -122,6 +122,27 @@ agent_start → turn_start → message_start/update/end（流式）
 
 `agentLoop()` / `agentLoopContinue()` 是返回 `EventStream<AgentEvent, AgentMessage[]>` 的便捷包装。
 
+### 5.1 Agent Loop 流程图
+
+```mermaid
+flowchart TD
+    START(["runAgentLoop(prompts, context, config, emit, signal, streamFn)"]) --> A["emit agent_start / turn_start<br/>+ 提示消息 message 事件"]
+    A --> B["transformContext(context)"]
+    B --> C["convertToLlm(AgentMessage[]) → Message[]"]
+    C --> D["streamFn(model, context, options)"]
+    D --> E["消费 AssistantMessageEventStream<br/>emit message_start / update / end"]
+    E --> F{"stopReason?"}
+    F -- toolUse --> G["validateToolArguments 校验参数"]
+    G --> H["AgentTool.execute()（可选并行）<br/>emit tool_execution_* 事件"]
+    H --> I["生成 toolResult 消息并入 context"]
+    I --> J["turn_end"]
+    F -- stop --> J
+    J --> K{"shouldStopAfterTurn?"}
+    K -- "否（含排出 steering / follow-up 队列）" --> B
+    K -- 是 --> FIN(["emit agent_end → 返回本轮新增消息"])
+    F -- "error / aborted" --> FIN
+```
+
 ## 6. AgentHarness（`src/harness/`）
 
 ### 6.1 概念模型
@@ -130,6 +151,32 @@ agent_start → turn_start → message_start/update/end（流式）
 - **Lane**：一条线性对话分支，拥有独立 tip、配置（model/thinkingLevel/tools）、队列（steer/followUp/nextRun）；
 - **Operation**：lane 上的一次受控操作 —— `run`（提示运行）/ `compaction`（压缩）/ `navigation`（树导航），经 `accept()` 准入 → `drive()` 驱动执行；
 - **Entry**：会话日志条目（message / compaction / branchSummary / custom 等）。
+
+### 6.1.1 三层能力结构图
+
+```mermaid
+graph TD
+    subgraph HarnessLayer["Harness 层 — 持久化会话运行时"]
+        HARNESS["AgentHarness（agent-harness.ts）"]
+        LANE_MAIN["lane: main"]
+        LANE_FX["lane: feature-x"]
+        SESSION[("Session — 树状 Entry 日志<br/>JSONL / SQLite / 内存")]
+        HARNESS --> LANE_MAIN
+        HARNESS --> LANE_FX
+        LANE_MAIN --> SESSION
+        LANE_FX --> SESSION
+    end
+    subgraph AgentLayer["Agent 层 — 有状态封装"]
+        AGENT["Agent（agent.ts）<br/>AgentState / prompt / steer / subscribe"]
+    end
+    subgraph LoopLayer["Loop 层 — 纯函数循环"]
+        LOOP["runAgentLoop / runAgentLoopContinue"]
+        STREAMFN["StreamFn（由上层注入 pi-ai streamSimple）"]
+        LOOP --> STREAMFN
+    end
+    HARNESS --> AGENT
+    AGENT --> LOOP
+```
 
 ### 6.2 `AgentHarness` 接口（`harness/agent-harness.ts`）
 
@@ -154,6 +201,34 @@ AgentHarness.create(options, context) → { harness, open }
 - `harness/runtime/drive.ts` + `drive/`：操作执行状态机（boundary、checkpoint、retry、deferred、recovery、terminal 等步骤）；
 - `harness/runtime/reducer.ts`：`reduceLaneSnapshot` —— 把 `LaneWatchEvent` 流归并成最新 `LaneSnapshot`（远程呈现端使用，配合 chord 的 strict-JSON 发布）；
 - `harness/execution/`：assistant 执行、工具执行与 effect gate（持久化恢复期间的效果门控）。
+
+### 6.3.1 Lane 操作时序图
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant App as 应用（TUI / RPC / SDK）
+    participant Lane as AgentLane
+    participant Op as Operation（run / compaction / navigation）
+    participant Drive as drive 状态机
+    participant AL as agentLoop
+    participant Store as Session 存储（JSONL / SQLite）
+
+    App->>Lane: prompt(text) / compact() / navigateTree()
+    Lane->>Op: 创建受控操作
+    Op->>Drive: accept() 准入（lane 空闲检查）
+    Drive->>Store: 写入 boundary（起点条目）
+    Drive->>AL: 驱动 Agent 循环（run 操作）
+    AL-->>Drive: AgentEvent 流（message / tool / turn）
+    Drive-->>Lane: HarnessEvent 广播
+    Lane-->>App: watch() → LaneSnapshot 更新
+    opt 阈值触发压缩
+        Drive->>Store: compaction（findCutPoint → 摘要条目）
+    end
+    Drive->>Store: checkpoint 持久化新增条目
+    Drive->>Drive: terminal（完成态）
+    Drive-->>App: Result（错误枚举化：LaneBusy / InvalidMessage…）
+```
 
 ### 6.4 Session 持久化（`harness/session/`）
 
