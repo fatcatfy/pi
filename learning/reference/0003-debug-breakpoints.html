@@ -148,6 +148,7 @@
 <div class="tip">打印模式（<code>-p "..."</code>）不需要 TUI 交互即可走到 #10/#11，适合首次验证断点链路。交互模式（Debug Pi Interactive）适合看 #7 输入与工具真实执行。</div>
 
 <h2>6. 本环境实测：CDP 断点链路数据（真实调用 DeepSeek）</h2>
+<p><a href="0004-breakpoint-trace-record.md"><strong>完整记录文档</strong></a>：每个断点的完整输出（含源码↔生成代码列映射与 4 轮模型/8 次工具的逐条数据）。本节为速查摘要。</p>
 <p>沙箱里无法开 VS Code，改用 CDP（Chrome DevTools Protocol）直连 <code>node --inspect-brk</code> 实际跑了一次 <code>pi -p "Summarize this repo" --model deepseek-v4-flash</code>。
 tsx/esbuild 会把代码压缩成极少数超长行，按下述方法把断点精确钉到字节列，再逐点恢复执行并求值表达式。完整脚本与日志：<code>learning/.tmp/pi-cdp-trace.mjs</code>、<code>pi-cdp-trace.jsonl</code>。</p>
 
