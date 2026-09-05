@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>第二课 · 一次输入怎么变成一次模型调用</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+</head>
+<body>
+
+<p class="lesson-number">Lesson 2 / Series: pi 架构入门</p>
+<h1 class="lesson-title">一次输入怎么变成一次模型调用</h1>
+<p class="meta">约 12 分钟 · 建立在 <a href="0001-repo-orientation.html">Lesson 1 仓库地图</a> 之上 · 目标：口述完整的"输入 → 模型调用 → 输出"链路，并能在仓库里指出每一步</p>
+
+<div class="win">
+<strong>这一课结束你会得到：</strong>一条可以讲给别人听的完整数据流——用户在终端敲下一句话，到模型跑完、回复渲染出来，中间经过 4 个环节；以及每个环节对应的真实代码位置。
+</div>
+
+<h2>1. 全景：一条 4 段式链路</h2>
+<figure class="diagram">
+<svg viewBox="0 0 780 340" role="img" aria-label="一次 prompt 的完整链路" xmlns="http://www.w3.org/2000/svg" style="font-family:ui-monospace,Menlo,Consolas,monospace;">
+<defs>
+<marker id="arr2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" fill="#8a8a80"/>
+</marker>
+<marker id="arrB" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" fill="#4169b0"/>
+</marker>
+</defs>
+
+<rect x="20" y="30" width="160" height="72" rx="9" fill="#f7eef0" stroke="#d9b8c0"/>
+<text x="36" y="54" font-size="13" font-weight="bold" fill="#8a3a3a">① 输入</text>
+<text x="36" y="74" font-size="11.5" fill="#333">interactive-mode.ts</text>
+<text x="36" y="91" font-size="11.5" fill="#333">session.prompt()</text>
+
+<rect x="210" y="30" width="160" height="72" rx="9" fill="#f7eef0" stroke="#d9b8c0"/>
+<text x="226" y="54" font-size="13" font-weight="bold" fill="#8a3a3a">② 会话</text>
+<text x="226" y="74" font-size="11.5" fill="#333">agent-session.ts</text>
+<text x="226" y="91" font-size="11.5" fill="#333">agent.prompt()</text>
+
+<rect x="400" y="30" width="160" height="72" rx="9" fill="#eef4ec" stroke="#c2d4be"/>
+<text x="416" y="54" font-size="13" font-weight="bold" fill="#4c7149">③ 主循环</text>
+<text x="416" y="74" font-size="11.5" fill="#333">agent-loop.ts</text>
+<text x="416" y="91" font-size="11.5" fill="#333">streamAssistantResponse</text>
+
+<rect x="590" y="30" width="170" height="72" rx="9" fill="#f4f1e6" stroke="#d8cfae"/>
+<text x="606" y="54" font-size="13" font-weight="bold" fill="#7a5a1e">④ 模型调用</text>
+<text x="606" y="74" font-size="11.5" fill="#333">streamSimple → provider</text>
+<text x="606" y="91" font-size="11.5" fill="#333">HTTP / SSE → LLM</text>
+
+<line x1="180" y1="66" x2="202" y2="66" stroke="#8a8a80" stroke-width="2" marker-end="url(#arr2)"/>
+<line x1="370" y1="66" x2="392" y2="66" stroke="#8a8a80" stroke-width="2" marker-end="url(#arr2)"/>
+<line x1="560" y1="66" x2="582" y2="66" stroke="#8a8a80" stroke-width="2" marker-end="url(#arr2)"/>
+
+<!-- 工具循环：从 ③ 下方绕回 ③ -->
+<path d="M480,102 L480,170 L400,170 L400,112" fill="none" stroke="#4169b0" stroke-width="2" marker-end="url(#arrB)"/>
+<text x="352" y="190" font-size="11.5" fill="#4169b0">有 toolCall：执行 → toolResult</text>
+<text x="352" y="206" font-size="11.5" fill="#4169b0">消息追加进上下文 → 再调模型</text>
+
+<!-- 输出：从 ③ 一路回到 ①（虚线） -->
+<path d="M425,102 L425,300 L100,300 L100,110" fill="none" stroke="#8a8a80" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#arr2)"/>
+<text x="430" y="292" font-size="11.5" fill="#8a8a80">无 toolCall → turn_end → agent_end(messages) → TUI 渲染回复</text>
+</svg>
+<figcaption>4 段链路 + 两个"回环"：工具调用循环（蓝）与最终输出（灰虚线）。</figcaption>
+</figure>
+
+<ol>
+<li><strong>输入</strong>：用户在 TUI 里回车，输入被 <code>session.prompt()</code> 收走（interactive-mode.ts）</li>
+<li><strong>会话</strong>：<code>AgentSession</code> 把它转成消息，交给 pi-agent-core 的 <code>Agent.prompt()</code></li>
+<li><strong>主循环</strong>：<code>runAgentLoop</code> 启动，<code>streamAssistantResponse</code> 负责"问模型一次"</li>
+<li><strong>模型调用</strong>：<code>streamFunction</code>（默认 <code>streamSimple</code>）按模型路由到对应供应商，发 HTTP/SSE 请求</li>
+</ol>
+
+<h2>2. 第 1 段：从键盘到会话</h2>
+<p>交互模式里，用户输入在 <code>interactive-mode.ts</code> 的 <code>onPrompt</code> 处理中被收集，最终调用 <code>this.session.prompt(userInput)</code>（interactive-mode.ts 约 1135 行）。<code>AgentSession</code>（core/agent-session.ts）做一两层封装后，第 1108 行执行 <code>this.agent.prompt(messages)</code>——至此控制权离开 coding-agent，进入 <strong>pi-agent-core</strong>。</p>
+<p>在 <code>Agent.prompt()</code>（agent.ts）里，字符串被 <code>normalizePromptInput</code> 包成一条 <code>user</code> 消息：<code>{ role: "user", content: [{ type: "text", text: "..." }], timestamp }</code>。</p>
+
+<h2>3. 第 2 段：主循环开转</h2>
+<p><code>runAgentLoop()</code>（agent-loop.ts 96 行）把 prompt 追加进上下文，开始发声事件，然后进入 <code>runLoop()</code>（156 行）。主循环由<strong>内层循环</strong>（一轮轮的模型调用）和<strong>外层循环</strong>（检查是否还有其他排队消息）组成。所有变化都以事件广播出去：<code>agent_start</code> → <code>turn_start</code> → <code>message_start</code>/<code>message_update</code>/<code>message_end</code> → <code>turn_end</code> → <code>agent_end</code>。TUI 就是订阅这些事件来画屏幕的。</p>
+<blockquote>内层循环的"燃料"只有一样东西：<strong>上下文</strong>。每一次模型调用都带上完整历史；工具结果也只是追加进历史里的普通消息，然后让模型再看一次。</blockquote>
+
+<h2>4. 第 3 段：模型调用的边界</h2>
+<p>每次"问模型"发生在 <code>streamAssistantResponse()</code>（agent-loop.ts 279 行），顺序是：</p>
+<ol>
+<li><code>transformContext(messages)</code>（可选）——比如长对话压缩（compaction）在这里发生，仍是 AgentMessage[]。</li>
+<li><code>convertToLlm(messages)</code>——关键的翻译边界：把 <code>AgentMessage[]</code> 转成 LLM 能吃的 <code>Message[]</code>（只保留 user / assistant / toolResult 三种角色）。</li>
+<li>组装 <code>llmContext = { systemPrompt, messages, tools }</code>——tools 就是可调用的函数清单，会原样发给模型。</li>
+<li><code>resolveApiKey</code>（支持会过期的 token）后调用 <code>streamFunction(config.model, llmContext, { apiKey, signal })</code>（306-310 行）。<strong>这里就是模型调用本身。</strong></li>
+</ol>
+<p><code>streamFunction</code> 的默认实现是 pi-ai 的 <code>streamSimple</code>——coding-agent 在 sdk.ts 第 37 行用 <code>setDefaultStreamFn(streamSimple)</code> 安装它；provider-composer 再按 <code>model.api</code> 把请求路由到具体供应商的适配器（如 <code>api/openai-responses.ts</code>），发出真正的 HTTP 请求。</p>
+<p>模型以<strong>流式事件</strong>返回，主循环 <code>for await</code> 逐条处理（315-359 行）：</p>
+<ul>
+<li><code>start</code> ——创建一条 partial 的 assistant 消息，立刻写回上下文并广播 <code>message_start</code>（TUI 马上开始画）</li>
+<li><code>text_delta</code> / <code>thinking_delta</code> / <code>toolcall_delta</code> ——增量更新 partial 消息，广播 <code>message_update</code>（打字机效果）</li>
+<li><code>done</code> —— <code>response.result()</code> 拿到最终完整 assistant 消息</li>
+</ul>
+
+<h2>5. 第 4 段：工具调用让循环再转一圈</h2>
+<p>最终消息里可能有 <code>toolCall</code> 内容（模型说"我想调用 <code>grep</code>"）。主循环抽出这些调用（222 行），走 <code>executeToolCalls()</code>（409 行）：</p>
+<ol>
+<li>校验参数 <code>validateToolArguments</code>，跑 <code>beforeToolCall</code> 钩子（可以拦截/拒绝）</li>
+<li>执行 <code>tool.execute(...)</code>（真实行为：读文件、跑 bash…也可能只有 JS 副作用）</li>
+<li>跑 <code>afterToolCall</code> 钩子（可改写结果）</li>
+<li>把结果包成 <code>toolResult</code> 消息，追加进上下文；<code>hasMoreToolCalls = true</code></li>
+</ol>
+<p><code>hasMoreToolCalls</code> 让<strong>内层循环再走一次</strong> <code>streamAssistantResponse</code>——模型现在能看到工具结果，于是可以继续说话或再调工具。这就是"一个 agent 能读文件、再决定改文件"的机制。</p>
+<p class="tip">注意过滤条件 <code>message.stopReason === "length"</code>（230-233 行）：输出被 token 上限截断时，工具调用可能参数残缺，pi 会直接把它们全部标记失败而不是执行——防止执行半截参数。</p>
+
+<h2>6. 第 5 段：收尾与输出</h2>
+<p>当某轮不带 toolCall，<code>turn_end</code> 发出，<code>shouldStopAfterTurn</code> 钩子决定是否收手（252 行）；外层循环再检查有没有排队的 follow-up / steering 消息（261 行），没有就以 <code>agent_end</code> 结束，携带<strong>这一整轮追加进来的全部消息</strong>。AgentSession 收到后把最终 assistant 消息渲染到 TUI（<code>message_update</code> 让它一早就开始流式显示，所以观众感觉是"边说边出"）。稳定的会话还会被写进 session 文件，供下次恢复。</p>
+
+<h2>7. 检验一下</h2>
+<div class="quiz">
+<div class="question" data-explain="正确。convertToLlm 把 AgentMessage[] 转成 Message[]，是 Agent 世界与 LLM 世界的翻译边界。" data-explain-wrong="它发生在 streamAssistantResponse 里、streamFunction 之前——把内部消息格式翻译成 LLM 格式。">
+<p class="q">Q1 · 调用模型之前，把 AgentMessage 历史转成 LLM 消息格式的是哪一步？</p>
+<button class="option" data-correct="true">convertToLlm</button>
+<button class="option" data-correct="false">transformContext</button>
+<button class="option" data-correct="false">validateToolArguments</button>
+<button class="option" data-correct="false">createAgentStream</button>
+<p class="feedback"></p>
+</div>
+
+<div class="question" data-explain="正确。执行工具、把结果写回上下文，然后让模型接着看——这就是内层循环再转一圈的原因。" data-explain-wrong="回想第 4 段：hasMoreToolCalls 让主循环做什么？">
+<p class="q">Q2 · 模型回了 toolCall，主循环接下来会做什么？</p>
+<button class="option" data-correct="false">直接结束本轮</button>
+<button class="option" data-correct="true">执行并追加结果继续</button>
+<button class="option" data-correct="false">清除全部历史</button>
+<button class="option" data-correct="false">重连供应商</button>
+<p class="feedback"></p>
+</div>
+
+<div class="question" data-explain="正确。工具结果以消息形式进上下文，模型带着新上下文被再问一次，直到不再调工具。" data-explain-wrong="想想第 3 段那句话：上下文就是内层循环的燃料。"">
+<p class="q">Q3 · 工具结果在循环里起的作用是？</p>
+<button class="option" data-correct="false">触发自动保存</button>
+<button class="option" data-correct="false">清空全部历史</button>
+<button class="option" data-correct="true">成为再调模型的理由</button>
+<button class="option" data-correct="false">直接结束对话</button>
+<p class="feedback"></p>
+</div>
+</div>
+
+<div class="footer-nav">
+<p><strong>速查：</strong><a href="../reference/0002-request-flow.html">参考 · 请求数据流速查</a>（每一步对应哪个文件哪段代码）</p>
+<p><strong>一手来源（本仓库代码）：</strong></p>
+<ul>
+<li><code>runLoop</code> 与 <code>streamAssistantResponse</code>：<a href="../../packages/agent/src/agent-loop.ts" target="_blank" rel="noopener">packages/agent/src/agent-loop.ts</a></li>
+<li><code>Agent.prompt</code>：<a href="../../packages/agent/src/agent.ts" target="_blank" rel="noopener">packages/agent/src/agent.ts</a></li>
+<li>默认 StreamFn 安装与 TUI 入口：<a href="../../packages/coding-agent/src/core/sdk.ts" target="_blank" rel="noopener">packages/coding-agent/src/core/sdk.ts</a>、<a href="../../packages/coding-agent/src/modes/interactive/interactive-mode.ts" target="_blank" rel="noopener">interactive-mode.ts</a></li>
+</ul>
+<p><strong>术语不懂？</strong>查 <a href="../reference/0001-repo-glossary.html">仓库术语表</a>；想看更大背景，回 <a href="0001-repo-orientation.html">Lesson 1</a>。</p>
+<p><strong>下一课预告：</strong>0003《工具调用：模型怎么"动手"》——读 <code>read</code>/<code>write</code>/<code>bash</code> 的真实实现与 before/afterToolCall 钩子。</p>
+<p>有任何不清楚的地方，直接向老师提问。</p>
+</div>
+
+<script src="../assets/quiz.js"></script>
+</body>
+</html>

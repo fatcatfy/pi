@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>参考 · 请求数据流速查</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+</head>
+<body>
+
+<p class="lesson-number">Reference 0002</p>
+<h1 class="lesson-title">请求数据流速查：一次 prompt 的 10 步</h1>
+<p class="meta">Lesson 2 的压缩速查 · 每一步：做什么 → 在哪</p>
+
+<h2>10 步链路</h2>
+<ol>
+<li><strong>用户输入</strong>——interactive-mode.ts 收下回车文本，调 <code>session.prompt(userInput)</code></li>
+<li><strong>会话封装</strong>——agent-session.ts 第 1108 行调 <code>agent.prompt(messages)</code>，进入 pi-agent-core</li>
+<li><strong>包成消息</strong>——agent.ts <code>normalizePromptInput</code> 产出 <code>user</code> AgentMessage：<code>{ role, content: [{type:"text",text}], timestamp }</code></li>
+<li><strong>启动循环</strong>——agent-loop.ts <code>runAgentLoop</code> → <code>runLoop</code>；事件：<code>agent_start</code> / <code>turn_start</code> / <code>message_start</code></li>
+<li><strong>翻译边界</strong>——<code>streamAssistantResponse</code>：<code>transformContext</code>（压缩等）→ <code>convertToLlm</code>（AgentMessage[] → Message[]）→ 组 <code>llmContext{systemPrompt, messages, tools}</code></li>
+<li><strong>模型调用</strong>——<code>streamFunction(model, llmContext, { apiKey, signal })</code>；默认 <code>streamSimple</code>（sdk.ts 安装），provider-composer 按 <code>model.api</code> 路由到供应商适配器，发 HTTP/SSE</li>
+<li><strong>流式事件</strong>——<code>for await</code> 处理 <code>start</code> / <code>text|thinking|toolcall _delta</code> / <code>done</code>；partial 消息实时写回上下文并广播 <code>message_update</code>（TUI 流式渲染）</li>
+<li><strong>最终消息</strong>——<code>done</code> 时 <code>response.result()</code> 得到完整 assistant 消息；若有 <code>toolCall</code>：校验参数 → <code>beforeToolCall</code> → <code>tool.execute</code> → <code>afterToolCall</code> → 生成 <code>toolResult</code> 消息</li>
+<li><strong>再循环</strong>——<code>toolResult</code> 追加进上下文，<code>hasMoreToolCalls=true</code>，回到第 5 步再问一次模型（携带完整历史）</li>
+<li><strong>收尾输出</strong>——无 toolCall → <code>turn_end</code> → <code>shouldStopAfterTurn</code> → <code>agent_end(messages)</code> → TUI 渲染最终回复；会话落盘可恢复</li>
+</ol>
+
+<h2>两个关键类型</h2>
+<table>
+<thead>
+<tr><th>类型</th><th>是什么</th><th>活跃范围</th></tr>
+</thead>
+<tbody>
+<tr><td><code>AgentMessage</code></td><td>pi 内部的对话消息（user / assistant / toolResult）</td><td>整个 agent 循环</td></tr>
+<tr><td><code>Message</code></td><td>传给 LLM 的格式</td><td>只在 <code>streamFunction</code> 边界（convertToLlm 转换）</td></tr>
+</tbody>
+</table>
+
+<h2>事件一览</h2>
+<table>
+<thead>
+<tr><th>事件</th><th>含义</th></tr>
+</thead>
+<tbody>
+<tr><td><code>agent_start / agent_end</code></td><td>整轮 run 开始 / 结束（agent_end 携带全部新消息）</td></tr>
+<tr><td><code>turn_start / turn_end</code></td><td>一轮"问模型"的开始 / 结束（一轮 = 一次模型调用及其工具执行）</td></tr>
+<tr><td><code>message_start / message_update / message_end</code></td><td>单条消息的创建 / 流式更新 / 完成</td></tr>
+<tr><td><code>tool_execution_start / _update / _end</code></td><td>工具生命周期（含 partial result 流）</td></tr>
+</tbody>
+</table>
+
+<h2>关键文件</h2>
+<table>
+<thead>
+<tr><th>文件</th><th>职责</th></tr>
+</thead>
+<tbody>
+<tr><td><code>packages/agent/src/agent-loop.ts</code></td><td>主循环、streamAssistantResponse、工具执行编排</td></tr>
+<tr><td><code>packages/agent/src/agent.ts</code></td><td><code>Agent</code> 状态封装、prompt/continue、事件订阅</td></tr>
+<tr><td><code>packages/agent/src/stream-fn.ts</code></td><td>默认 StreamFn 的安装点</td></tr>
+<tr><td><code>packages/coding-agent/src/core/sdk.ts</code></td><td><code>setDefaultStreamFn(streamSimple)</code></td></tr>
+<tr><td><code>packages/coding-agent/src/core/provider-composer.ts</code></td><td>按 <code>model.api</code> 路由到供应商 / 扩展</td></tr>
+<tr><td><code>packages/ai/src/compat.ts</code></td><td><code>streamSimple</code> 对外 API</td></tr>
+<tr><td><code>packages/ai/src/api/*.ts</code></td><td>各供应商 HTTP 适配器（openai、anthropic、google…）</td></tr>
+</tbody>
+</table>
+
+<div class="footer-nav">
+<p>回 <a href="../lessons/0002-prompt-to-model-call.html">Lesson 2</a> · 术语查 <a href="0001-repo-glossary.html">Glossary</a></p>
+</div>
+
+</body>
+</html>

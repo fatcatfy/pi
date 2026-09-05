@@ -10,7 +10,11 @@
   - `learning-records/*.md` 记录用户学到的重要 insights（0001- 编号递增）
   - `MISSION.md` 学习动机（compass 角色，保持短）
 - 已建课：`lessons/0001-repo-orientation.html`（仓库地图）
+- 已建课：`lessons/0002-prompt-to-model-call.html`（输入→模型调用→输出的完整链路）
 - 已建参考：`reference/0001-repo-glossary.html`（术语表，之后所有课须遵守）
+- 已建参考：`reference/0002-request-flow.html`（请求数据流 10 步速查）
+- 下一课候选：`0003` 工具调用深入（read/write/bash 实现、before/afterToolCall 钩子）
+- 学习记录：暂未写入（用户尚未展示对课内内容的可证实理解，素材未达 learning-record 门槛）
 - 仓库事实备忘：
   - remote 是 fork `fatcatfy/pi`（分支 `learn`）；上游 `earendil-works/pi`
   - 依赖/构建顺序（根 package.json build 脚本）：chord → tui → telemetry → ai → agent → session-backends/sqlite-node → protocol → client → server → coding-agent
