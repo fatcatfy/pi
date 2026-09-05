@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>前置 03 · Node.js 事件与 Stream（结合 PI 代码）</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+</head>
+<body>
+
+<p class="lesson-number">Prerequisite 03 / ★★★★</p>
+<h1 class="lesson-title">Node.js 事件与 Stream：PI 怎么流动数据</h1>
+<p class="meta">约 12 分钟 · 锚定 <code>EventStream</code> 与 <code>EventEmitter</code> 真实实现 · 目标：理解"事件"和"流"两种数据传递方式，以及 PI 为什么两种都用</p>
+
+<div class="win">
+<strong>这一课结束你会得到：</strong>区分"事件总线（广播）"和"流（有序消费）"；看懂 PI 的 <code>EventStream.push()</code> / <code>for await</code> 机制；知道 SSE 是什么。
+</div>
+
+<h2>1. 两种数据传递：事件 vs 流</h2>
+<p>PI 里有两种"异步传数据"的方式，别混淆：</p>
+<table>
+<thead>
+<tr><th></th><th>事件（EventEmitter）</th><th>流（Stream / EventStream）</th></tr>
+</thead>
+<tbody>
+<tr><td>比喻</td><td>广播站：对所有听众广播</td><td>水管：数据按顺序流到消费端</td></tr>
+<tr><td>消费者</td><td>可有多个订阅者，互不干扰</td><td>通常一个消费者，按顺序拿</td></tr>
+<tr><td>PI 用途</td><td>TUI 内部组件通信</td><td>模型响应、Agent 事件流</td></tr>
+</tbody>
+</table>
+
+<h2>2. 事件：EventEmitter 的 emit / on</h2>
+<p>PI 的 <code>event-bus.ts</code> 是最简封装：</p>
+<pre><code>import { EventEmitter } from "node:events";
+
+const emitter = new EventEmitter();
+return {
+  emit: (channel, data) =&gt; emitter.emit(channel, data),
+  on: (channel, handler) =&gt; {
+    const safeHandler = (data: unknown) =&gt; { try { handler(data); } catch {} };
+    emitter.on(channel, safeHandler);
+    return () =&gt; emitter.off(channel, safeHandler);
+  },
+};</code></pre>
+<p>三个核心操作：</p>
+<ul>
+<li><code>emit(channel, data)</code>：在某个频道上发消息，所有订阅该频道的 handler 都会被调用</li>
+<li><code>on(channel, handler)</code>：订阅频道，返回一个<strong>取消订阅函数</strong>（PI 用 try/catch 包裹 handler，防止一个组件崩了带垮整个总线）</li>
+<li><code>off(channel, handler)</code>：取消订阅</li>
+</ul>
+<p>事件适合"多个地方都关心同一件事"——比如用户切换模型时，好几个 UI 组件都要刷新。</p>
+
+<h2>3. 流：PI 自己实现的 EventStream</h2>
+<p>模型的流式响应不能用事件——它有顺序（token 必须按到达顺序处理），且通常只有一个消费者。PI 写了一个 <code>EventStream</code> 类（<code>packages/ai/src/utils/event-stream.ts</code>）：</p>
+<pre><code>export class EventStream&lt;T, R = T&gt; implements AsyncIterable&lt;T&gt; {
+  private queue: T[] = [];
+  private waiting: ((value: IteratorResult&lt;T&gt;) =&gt; void)[] = [];
+  private done = false;
+
+  push(event: T): void {
+    const waiter = this.waiting.shift();
+    if (waiter) {
+      waiter({ value: event, done: false });   // 有人在等，直接给
+    } else {
+      this.queue.push(event);                  // 没人等，先排队
+    }
+  }
+
+  async *[Symbol.asyncIterator]() {            // 让 for await 能用
+    while (true) {
+      if (this.queue.length &gt; 0) yield this.queue.shift()!;
+      else if (this.done) return;
+      else {
+        const result = await new Promise(r =&gt; this.waiting.push(r));  // 挂起等下一个
+        if (result.done) return;
+        yield result.value;
+      }
+    }
+  }
+}</code></pre>
+<p>这是一个<strong>生产者-消费者</strong>模型：</p>
+<ul>
+<li><strong>生产者</strong>（模型响应处理代码）调 <code>stream.push(event)</code> 往里塞数据</li>
+<li><strong>消费者</strong>（agent-loop）用 <code>for await (const event of stream)</code> 逐条取</li>
+<li>如果消费者还没准备好，数据先进 <code>queue</code>；如果队列空了，消费者挂起（<code>waiting</code>），等下一次 push</li>
+</ul>
+<p>这就是上一课 <code>for await (const event of response)</code> 背后的真实机制。</p>
+
+<h2>4. SSE：LLM 响应为什么是"流"</h2>
+<p>大模型供应商的 API 默认支持 <strong>Server-Sent Events</strong>（SSE）——服务器一边生成 token 一边通过 HTTP 连接推送，每个 token 是一个 <code>data: {...}\n\n</code> 格式的事件。PI 的供应商适配器（如 <code>api/openai-responses.ts</code>）解析这些 SSE chunk，每解析到一个就 <code>stream.push({ type: "text_delta", partial: ... })</code>，于是 agent-loop 能逐 token 渲染。</p>
+<p class="tip"><strong>一句话：</strong>SSE 是网络层的流，EventStream 是 PI 进程内的流。适配器把 SSE 翻译成 EventStream 事件。</p>
+
+<h2>5. Node 内置流（简介）</h2>
+<p>除了自定义 EventStream，PI 还用 Node 内置流：TUI 从 <code>process.stdin</code>（可读流）读用户按键，写屏到 <code>process.stdout</code>（可写流）。这些在理解 TUI 渲染时才会深入，前置阶段知道"stdin 是流、stdout 是流"即可。</p>
+
+<h2>6. 检验一下</h2>
+<div class="quiz">
+<div class="question" data-explain="正确。事件是广播给所有订阅者；流通常只有一个有序消费者。" data-explain-wrong="回想第 1 节的对比表。">
+<p class="q">Q1 · 事件（EventEmitter）和流（Stream）最核心的区别是？</p>
+<button class="option" data-correct="true">事件可多订阅者广播，流通常单消费者有序</button>
+<button class="option" data-correct="false">事件更快，流更慢</button>
+<button class="option" data-correct="false">事件只能传字符串，流能传对象</button>
+<button class="option" data-correct="false">没有区别</button>
+<p class="feedback"></p>
+</div>
+
+<div class="question" data-explain="正确。push 时若有等待的消费者直接交付，否则进 queue。" data-explain-wrong="回想 EventStream 的 push 实现：先看 waiting 队列，再看 queue。">
+<p class="q">Q2 · <code>EventStream.push(event)</code> 在没有消费者等待时会怎样？</p>
+<button class="option" data-correct="false">丢弃 event</button>
+<button class="option" data-correct="false">抛错</button>
+<button class="option" data-correct="true">event 进 queue，等消费者来取</button>
+<button class="option" data-correct="false">阻塞直到消费者出现</button>
+<p class="feedback"></p>
+</div>
+
+<div class="question" data-explain="正确。供应商适配器解析 SSE chunk，每段 push 成 EventStream 事件。" data-explain-wrong="SSE 是网络格式，EventStream 是进程内格式，适配器做翻译。">
+<p class="q">Q3 · PI 里 SSE 和 EventStream 的关系是？</p>
+<button class="option" data-correct="false">它们是同一个东西</button>
+<button class="option" data-correct="true">适配器把 SSE 翻译成 EventStream 事件</button>
+<button class="option" data-correct="false">EventStream 生成 SSE</button>
+<button class="option" data-correct="false">两者无关</button>
+<p class="feedback"></p>
+</div>
+</div>
+
+<div class="footer-nav">
+<p><strong>一手来源（PI 真实代码）：</strong></p>
+<ul>
+<li><a href="../../packages/ai/src/utils/event-stream.ts" target="_blank" rel="noopener">packages/ai/src/utils/event-stream.ts</a>（EventStream 完整实现）</li>
+<li><a href="../../packages/coding-agent/src/core/event-bus.ts" target="_blank" rel="noopener">packages/coding-agent/src/core/event-bus.ts</a>（EventEmitter 封装）</li>
+<li><a href="../../packages/agent/src/agent-loop.ts" target="_blank" rel="noopener">packages/agent/src/agent-loop.ts</a>（for await 消费流）</li>
+</ul>
+<p><strong>下一门：</strong><a href="pre-004-llm-api-concepts.html">04 · LLM API 概念</a>——streaming、tool calling、context window、reasoning。</p>
+<p>回 <a href="pre-index.html">前置知识总目录</a>。有任何不清楚的地方，直接向老师提问。</p>
+</div>
+
+<script src="../assets/quiz.js"></script>
+</body>
+</html>

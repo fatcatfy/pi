@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>前置 07 · 终端基础（结合 PI TUI）</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+</head>
+<body>
+
+<p class="lesson-number">Prerequisite 07 / ★★</p>
+<h1 class="lesson-title">终端基础：PI 的 TUI 怎么画屏、怎么读键</h1>
+<p class="meta">约 8 分钟 · 建立"终端是什么"的心智模型 · 目标：理解 PI TUI 渲染和键盘输入的底层机制</p>
+
+<div class="win">
+<strong>这一课结束你会得到：</strong>知道终端里的文字是"字符+转义序列"画出来的，raw mode 让按键不用回车就生效，stdin/stdout 是两个流。
+</div>
+
+<h2>1. 终端本质：字符流 + 控制序列</h2>
+<p>终端（terminal）不是画布，它只接收一个<strong>字符流</strong>。要让文字变颜色、移动光标、清屏，靠的是 <strong>ANSI 转义序列</strong>——一串以 <code>\x1b[</code>（ESC + [）开头的特殊字符，终端看到后执行对应动作，不显示出来。</p>
+<table>
+<thead>
+<tr><th>序列</th><th>作用</th></tr>
+</thead>
+<tbody>
+<tr><td><code>\x1b[31m</code></td><td>后续文字变红</td></tr>
+<tr><td><code>\x1b[0m</code></td><td>重置所有样式</td></tr>
+<tr><td><code>\x1b[2J</code></td><td>清屏</td></tr>
+<tr><td><code>\x1b[H</code></td><td>光标移到左上角</td></tr>
+<tr><td><code>\x1b[10;5H</code></td><td>光标移到第 10 行第 5 列</td></tr>
+</tbody>
+</table>
+<p>PI 的 TUI（<code>packages/tui</code>）就是计算每一帧该输出哪些字符和哪些转义序列，写到 stdout 上。所谓"差分渲染"就是：只输出相对上一帧变化了的部分，减少写入量、让刷新更顺滑。</p>
+
+<h2>2. stdin / stdout：两个独立的流</h2>
+<p>每个终端程序有三个标准流：</p>
+<ul>
+<li><code>stdin</code>（标准输入）：键盘输入进来的地方，PI 的 TUI 从这里读按键</li>
+<li><code>stdout</code>（标准输出）：程序正常输出，PI 把画面写在这里</li>
+<li><code>stderr</code>（标准错误）：错误信息</li>
+</ul>
+<p>它们都是流（见第 3 课），PI 的 TUI 订阅 stdin 的 <code>data</code> 事件拿到按键，把渲染结果写入 stdout。</p>
+
+<h2>3. Raw Mode：按键即时响应的秘密</h2>
+<p>默认终端处于 <strong>cooked mode</strong>：你打的字先存在缓冲区，按回车才一起发给程序（这就是为什么普通 CLI 程序要回车才执行）。</p>
+<p>交互式 TUI 需要<strong>每按一个键就立刻响应</strong>（方向键、Esc、单键快捷键），所以 PI 会把终端切到 <strong>raw mode</strong>：</p>
+<ul>
+<li>按键直接发给程序，不缓冲、不回显</li>
+<li>程序自己决定怎么处理（比如把 <code>j</code> 解释成下移）</li>
+<li>退出时必须切回 cooked mode，否则终端会"坏掉"（打字看不到、回车不执行）</li>
+</ul>
+<p>这也是为什么 TUI 程序崩溃后有时终端会乱——恢复逻辑没跑完。PI 的 TUI 有清理逻辑保证退出时恢复。</p>
+
+<h2>4. PI 中相关的代码位置</h2>
+<ul>
+<li><code>packages/tui</code>：终端渲染库（差分渲染、ANSI 输出）</li>
+<li><code>packages/coding-agent/src/modes/interactive/</code>：交互模式，从 stdin 读键、渲染聊天界面</li>
+</ul>
+<p>读这部分代码时，遇到 <code>process.stdin.setRawMode(true)</code>、<code>\x1b[</code>、<code>process.stdout.write</code> 就不陌生了。</p>
+
+<h2>5. 检验一下</h2>
+<div class="quiz">
+<div class="question" data-explain="正确。ANSI 转义序列以 ESC [ 开头，控制颜色/光标/清屏等。" data-explain-wrong="终端控制靠 ANSI 转义序列。">
+<p class="q">Q1 · 终端里让文字变色、移动光标靠的是？</p>
+<button class="option" data-correct="false">像素绘制</button>
+<button class="option" data-correct="true">ANSI 转义序列</button>
+<button class="option" data-correct="false">HTML 标签</button>
+<button class="option" data-correct="false">CSS 样式</button>
+<p class="feedback"></p>
+</div>
+
+<div class="question" data-explain="正确。raw mode 让按键不缓冲、不回车就直接发给程序。" data-explain-wrong="raw mode 是交互 TUI 的关键。">
+<p class="q">Q2 · 为什么 PI TUI 要把终端切到 raw mode？</p>
+<button class="option" data-correct="false">为了提高网速</button>
+<button class="option" data-correct="true">让每个按键立刻被程序收到</button>
+<button class="option" data-correct="false">为了显示彩色</button>
+<button class="option" data-correct="false">为了节省内存</button>
+<p class="feedback"></p>
+</div>
+
+<div class="question" data-explain="正确。PI TUI 从 stdin 读按键，把渲染结果写入 stdout。" data-explain-wrong="输入走 stdin，输出走 stdout。">
+<p class="q">Q3 · PI TUI 从哪里读用户按键、把画面写到哪里？</p>
+<button class="option" data-correct="true">stdin 读键，stdout 写画面</button>
+<button class="option" data-correct="false">stdout 读键，stdin 写画面</button>
+<button class="option" data-correct="false">都从文件读</button>
+<button class="option" data-correct="false">都从网络读</button>
+<p class="feedback"></p>
+</div>
+</div>
+
+<div class="footer-nav">
+<p><strong>一手来源（PI 真实代码）：</strong></p>
+<ul>
+<li><code>packages/tui</code>（终端渲染库）</li>
+<li><code>packages/coding-agent/src/modes/interactive/</code>（交互模式）</li>
+</ul>
+<p>这是前置系列最后一门。回 <a href="pre-index.html">前置知识总目录</a> 复习，或回到主系列 <a href="0002-prompt-to-model-call.html">Lesson 2</a> 把这些知识套进真实链路。</p>
+<p>有任何不清楚的地方，直接向老师提问。</p>
+</div>
+
+<script src="../assets/quiz.js"></script>
+</body>
+</html>

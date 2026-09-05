@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>前置 02 · async/await 与 Promise（结合 PI 代码）</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+</head>
+<body>
+
+<p class="lesson-number">Prerequisite 02 / ★★★★★</p>
+<h1 class="lesson-title">async/await 与 Promise：读懂 Agent Loop 的异步骨架</h1>
+<p class="meta">约 12 分钟 · 全部来自 <code>packages/agent/src/agent-loop.ts</code> 真实代码 · 目标：能顺着异步调用链追踪一次模型调用</p>
+
+<div class="win">
+<strong>这一课结束你会得到：</strong>看懂 <code>async function</code>、<code>await</code>、<code>for await</code>、<code>Promise.all</code>、<code>AbortSignal</code>——这些正是 Agent Loop 转起来的全部异步机制。
+</div>
+
+<h2>1. 为什么 PI 全是 async</h2>
+<p>PI 要做的事几乎都<strong>不能同步完成</strong>：发 HTTP 请求等模型、读写文件、跑子进程、把事件推给 TUI 渲染。这些操作在等待期间如果阻塞整个程序，界面就卡死了。JavaScript（以及 TypeScript）的解法是：<strong>把"等"包装成 Promise，用 async/await 写得像同步代码，但实际不阻塞</strong>。</p>
+
+<h2>2. 基础：async 函数返回 Promise</h2>
+<p>任何 <code>async function</code> 的返回值都会被自动包成 <code>Promise</code>。来自 <code>agent-loop.ts</code>：</p>
+<pre><code>async function runAgentLoop(
+  prompts: AgentMessage[],
+  ...
+): Promise&lt;AgentMessage[]&gt; {
+  ...
+  await runLoop(...);
+  return newMessages;
+}</code></pre>
+<p>虽然 <code>return newMessages</code> 看起来返回的是数组，但函数签名声明 <code>Promise&lt;AgentMessage[]&gt;</code>——调用方必须 <code>await</code> 或 <code>.then()</code> 才能拿到真实数组。<strong>async 函数里 return 的值，外部一定要 await。</strong></p>
+
+<h2>3. await："在这里等一下，但不阻塞"</h2>
+<pre><code>await emit({ type: "agent_start" });
+await emit({ type: "turn_start" });</code></pre>
+<p><code>await</code> 会暂停当前函数的执行，直到右边的 Promise 完成，然后继续。关键：<strong>暂停的只是这个函数，不是整个程序</strong>——其他代码（比如 TUI 渲染、用户按键）照样跑。这就是为什么 PI 能一边等模型一边显示打字机效果。</p>
+
+<h2>4. for await：PI 流式响应的核心</h2>
+<p>模型响应是流式的——一个 token 一个 token 地返回，不是一次性给完整结果。PI 用 <code>for await</code> 逐条消费：</p>
+<pre><code>for await (const event of response) {
+  switch (event.type) {
+    case "text_delta":
+      partialMessage = event.partial;
+      await emit({ type: "message_update", message: { ...partialMessage } });
+      break;
+    case "done":
+      const finalMessage = await response.result();
+      ...
+  }
+}</code></pre>
+<p><code>response</code> 是一个<strong>异步迭代器</strong>（async iterator）。<code>for await</code> 的意思是："每次循环等下一个事件到达，处理它，再等下一个"。模型每吐一个 token，循环就跑一次，把增量广播出去——这就是 TUI 上看到的逐字输出。</p>
+<div class="tip"><strong>记住：</strong><code>for await</code> 处理的是"一系列会在未来到达的值"。普通 <code>for</code> 处理同步数组，<code>for await</code> 处理异步流。</div>
+
+<h2>5. Promise.all：并发执行多个工具</h2>
+<p>当模型一次发起多个工具调用，PI 会并行执行而不是串行等待：</p>
+<pre><code>const orderedFinalizedCalls = await Promise.all(
+  finalizedCalls.map((entry) =&gt;
+    typeof entry === "function" ? entry() : Promise.resolve(entry)
+  ),
+);</code></pre>
+<p><code>Promise.all([...])</code> 接收一个 Promise 数组，<strong>同时</strong>启动它们，等<strong>全部</strong>完成后返回结果数组（顺序与输入一致）。如果其中任何一个 reject，整个 all 会立刻 reject。这就是为什么多个独立的文件读取可以同时进行、更快返回。</p>
+
+<h2>6. AbortSignal：如何取消正在进行的异步操作</h2>
+<p>用户按 Esc 或切换会话时，PI 需要中断正在等的模型请求或工具执行。机制是 <code>AbortController</code> + <code>AbortSignal</code>：</p>
+<pre><code>// agent.ts 里创建
+const abortController = new AbortController();
+// 传给所有异步调用
+await runAgentLoop(..., abortController.signal, ...);
+
+// 取消时
+abort(): void {
+  this.activeRun?.abortController.abort();
+}</code></pre>
+<p>信号会一路传到 <code>streamFunction(model, ctx, { signal })</code> 和 <code>tool.execute(..., signal)</code>。被 abort 的 fetch 会抛 <code>AbortError</code>，工具执行会检查 <code>signal.aborted</code> 提前退出。主循环据此在 <code>stopReason === "aborted"</code> 时收尾。</p>
+
+<h2>7. try/catch/finally：异步世界的兜底</h2>
+<pre><code>try {
+  await executor(abortController.signal);
+} catch (error) {
+  await this.handleRunFailure(error, aborted);
+} finally {
+  this.finishRun();
+}</code></pre>
+<p><code>await</code> 抛错时，用 <code>catch</code> 接住（模型请求失败、工具抛异常都走这里）。<code>finally</code> 无论成功失败都执行——PI 用它清理 <code>activeRun</code> 状态，保证即使出错也不会卡在"正在运行"。</p>
+
+<h2>8. 检验一下</h2>
+<div class="quiz">
+<div class="question" data-explain="正确。await 暂停当前函数但不阻塞整个事件循环，其他代码继续跑。" data-explain-wrong="await 只暂停当前 async 函数，事件循环继续处理其他任务。">
+<p class="q">Q1 · <code>await</code> 某个 Promise 时，整个程序会停止执行吗？</p>
+<button class="option" data-correct="false">会，程序完全卡住</button>
+<button class="option" data-correct="true">不会，只暂停当前函数</button>
+<button class="option" data-correct="false">会，但只暂停 1 秒</button>
+<button class="option" data-correct="false">取决于 Promise 类型</button>
+<p class="feedback"></p>
+</div>
+
+<div class="question" data-explain="正确。for await 逐条消费异步迭代器产出的值，适合流式数据。" data-explain-wrong="回想第 4 节：for await 专门处理异步迭代器。">
+<p class="q">Q2 · PI 用什么语法逐条消费模型的流式响应？</p>
+<button class="option" data-correct="false">while (true)</button>
+<button class="option" data-correct="false">setInterval</button>
+<button class="option" data-correct="true">for await (const event of response)</button>
+<button class="option" data-correct="false">response.then(...)</button>
+<p class="feedback"></p>
+</div>
+
+<div class="question" data-explain="正确。Promise.all 同时启动所有 Promise，全部完成后返回。" data-explain-wrong="Promise.all 是并发的，不是串行的。">
+<p class="q">Q3 · <code>Promise.all([p1, p2, p3])</code> 会怎样执行 p1/p2/p3？</p>
+<button class="option" data-correct="false">严格按顺序一个个执行</button>
+<button class="option" data-correct="false">随机执行一个</button>
+<button class="option" data-correct="true">同时启动，全部完成后返回结果数组</button>
+<button class="option" data-correct="false">只执行第一个</button>
+<p class="feedback"></p>
+</div>
+</div>
+
+<div class="footer-nav">
+<p><strong>一手来源（PI 真实代码）：</strong></p>
+<ul>
+<li><a href="../../packages/agent/src/agent-loop.ts" target="_blank" rel="noopener">packages/agent/src/agent-loop.ts</a>（async 函数、for await、Promise.all、try/catch）</li>
+<li><a href="../../packages/agent/src/agent.ts" target="_blank" rel="noopener">packages/agent/src/agent.ts</a>（AbortController、runWithLifecycle）</li>
+</ul>
+<p><strong>下一门：</strong><a href="pre-003-node-streams-events.html">03 · Node.js 事件与 Stream</a>——TUI 读 stdin、LLM 响应是 SSE 流、事件总线用 EventEmitter。</p>
+<p>回 <a href="pre-index.html">前置知识总目录</a>。有任何不清楚的地方，直接向老师提问。</p>
+</div>
+
+<script src="../assets/quiz.js"></script>
+</body>
+</html>

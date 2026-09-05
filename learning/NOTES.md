@@ -14,6 +14,15 @@
 - 已建参考：`reference/0001-repo-glossary.html`（术语表，之后所有课须遵守）
 - 已建参考：`reference/0002-request-flow.html`（请求数据流 10 步速查）
 - 下一课候选：`0003` 工具调用深入（read/write/bash 实现、before/afterToolCall 钩子）
+- **前置知识系列（pre-*）**已完成 7 门，全部锚定 PI 真实代码：
+  - `pre-index.html` 总目录（按 ★ 排序）
+  - `pre-001-typescript.html`（★★★★★）interface/泛型/可辨识联合/satisfies/as，代码来自 agent.ts、agent-loop.ts、types.ts
+  - `pre-002-async-await-promise.html`（★★★★★）async/for await/Promise.all/AbortSignal/try-catch，代码来自 agent-loop.ts、agent.ts
+  - `pre-003-node-streams-events.html`（★★★★）EventEmitter（event-bus.ts）+ EventStream（ai/src/utils/event-stream.ts）+ SSE
+  - `pre-004-llm-api-concepts.html`（★★★★）Context/streaming events/tool calling/context window & compaction/reasoning，来自 ai/types.ts
+  - `pre-005-git.html`（★★★）6 个常用命令 + AGENTS.md 的 Git 红线
+  - `pre-006-npm-monorepo.html`（★★）workspaces 符号链接 + 构建顺序 + 依赖安全约定
+  - `pre-007-terminal-basics.html`（★★）ANSI 转义序列/stdin-stdout/raw mode，关联 tui 与 interactive mode
 - 学习记录：暂未写入（用户尚未展示对课内内容的可证实理解，素材未达 learning-record 门槛）
 - 仓库事实备忘：
   - remote 是 fork `fatcatfy/pi`（分支 `learn`）；上游 `earendil-works/pi`

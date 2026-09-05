@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>前置知识系列 · 学习 PI 之前</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+</head>
+<body>
+
+<p class="lesson-number">Prerequisites Series</p>
+<h1 class="lesson-title">学习 PI 之前：7 门前置知识课</h1>
+<p class="meta">每课 8–15 分钟 · 全部锚定 PI 仓库真实代码 · 按重要度排序</p>
+
+<p>这组前置课不是泛泛的入门教程——每一个概念都用 PI 项目里的真实代码片段来解释。学完后再去看 PI 的 agent loop、tool 系统、TUI，不会被语言细节绊住。</p>
+
+<h2>课程地图</h2>
+<table>
+<thead>
+<tr><th>优先级</th><th>课程</th><th>为什么要学</th></tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>★★★★★</strong></td>
+<td><a href="pre-001-typescript.html">01 · TypeScript 核心</a></td>
+<td>项目 100% TS，大量泛型、类型守卫、接口、条件类型、可辨识联合</td>
+</tr>
+<tr>
+<td><strong>★★★★★</strong></td>
+<td><a href="pre-002-async-await-promise.html">02 · async/await 与 Promise</a></td>
+<td>Agent Loop 完全异步，流式响应基于 async iterator</td>
+</tr>
+<tr>
+<td><strong>★★★★</strong></td>
+<td><a href="pre-003-node-streams-events.html">03 · Node.js 事件与 Stream</a></td>
+<td>TUI 读 stdin 流，LLM 响应是 SSE 流，事件总线用 EventEmitter</td>
+</tr>
+<tr>
+<td><strong>★★★★</strong></td>
+<td><a href="pre-004-llm-api-concepts.html">04 · LLM API 概念</a></td>
+<td>理解 streaming、tool calling、context window、reasoning</td>
+</tr>
+<tr>
+<td><strong>★★★</strong></td>
+<td><a href="pre-005-git.html">05 · Git</a></td>
+<td>克隆仓库、切换分支、看 diff、看日志</td>
+</tr>
+<tr>
+<td><strong>★★</strong></td>
+<td><a href="pre-006-npm-monorepo.html">06 · npm & Monorepo</a></td>
+<td>workspaces 管理 10+ 包的依赖与构建顺序</td>
+</tr>
+<tr>
+<td><strong>★★</strong></td>
+<td><a href="pre-007-terminal-basics.html">07 · 终端基础</a></td>
+<td>ANSI 转义码、raw mode、stdin/stdout，理解 TUI 怎么画屏</td>
+</tr>
+</tbody>
+</table>
+
+<h2>学习建议</h2>
+<ol>
+<li>从 ★★★★★ 开始，两门课学完再进入 PI 主系列，基本不会被语言卡住</li>
+<li>每节课都有 3 道自测题（即时反馈），做完再进下一门</li>
+<li>★★★★ 与 ★★★ 按需穿插：读 PI 某段代码遇到陌生概念，直接跳到对应章节查</li>
+<li>★★ 的两门可以通读一遍建立"知道有这回事"的印象，用到时再回来细看</li>
+</ol>
+
+<div class="footer-nav">
+<p><strong>已修完主系列？</strong>回 <a href="0002-prompt-to-model-call.html">Lesson 2 · 一次输入怎么变成一次模型调用</a> 把前置知识套进真实链路。</p>
+<p><strong>术语不懂？</strong>查 <a href="../reference/0001-repo-glossary.html">仓库术语表</a>。</p>
+<p>有任何不清楚的地方，直接向老师提问。</p>
+</div>
+
+</body>
+</html>

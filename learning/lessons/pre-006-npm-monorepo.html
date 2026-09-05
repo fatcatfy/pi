@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>前置 06 · npm & Monorepo（结合 PI）</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+</head>
+<body>
+
+<p class="lesson-number">Prerequisite 06 / ★★</p>
+<h1 class="lesson-title">npm & Monorepo：PI 的 10+ 包怎么组织</h1>
+<p class="meta">约 8 分钟 · 锚定 PI 的真实 package.json 与 workspaces · 目标：理解为什么 PI 是 monorepo、包之间怎么依赖、怎么构建</p>
+
+<div class="win">
+<strong>这一课结束你会得到：</strong>看懂 PI 的 <code>package.json</code> workspaces 字段，知道包之间的依赖方向，会跑构建和检查命令。
+</div>
+
+<h2>1. 什么是 Monorepo</h2>
+<p>一个 git 仓库里放多个 npm 包，而不是一个包一个仓库。PI 就是典型 monorepo：根目录下 <code>packages/agent</code>、<code>packages/ai</code>、<code>packages/coding-agent</code> 等各自是一个独立的 npm 包，但共享同一个 git 历史、同一套构建工具。</p>
+<p><strong>好处</strong>：跨包改功能时一次提交就能改完、原子化；依赖的包直接用本地源码，不用发布。</p>
+
+<h2>2. workspaces：npm 的 monorepo 机制</h2>
+<p>PI 用 npm workspaces（不需要 lerna/turborepo）。根 <code>package.json</code> 里：</p>
+<pre><code>"workspaces": [
+  "packages/*",
+  "packages/session-backends/*"
+]</code></pre>
+<p>这告诉 npm：<code>packages/</code> 下每个子目录、<code>packages/session-backends/</code> 下每个子目录都是一个 workspace 包。<code>npm install</code> 时，npm 会把这些本地包<strong>用符号链接</strong>连到根 <code>node_modules</code>，所以 <code>@earendil-works/pi-agent-core</code> 实际上指向 <code>packages/agent</code> 的源码——改了源码立刻生效，不用重新发布。</p>
+
+<h2>3. 包之间的依赖方向（构建顺序）</h2>
+<p>PI 的构建脚本严格按依赖顺序（第 1 课见过）：</p>
+<pre><code>chord → tui → telemetry → ai → agent → session-backends/sqlite-node
+→ protocol → client → server → coding-agent</code></pre>
+<p>越靠后越依赖前面的。比如 <code>coding-agent</code> 依赖 <code>agent</code>，<code>agent</code> 依赖 <code>ai</code>。所以必须先 build 底层，上层才能编译通过。</p>
+
+<h2>4. 常用命令</h2>
+<table>
+<thead>
+<tr><th>命令</th><th>作用</th></tr>
+</thead>
+<tbody>
+<tr><td><code>npm install</code></td><td>安装所有依赖（含 workspace 符号链接）</td></tr>
+<tr><td><code>npm run build</code></td><td>按顺序构建所有包</td></tr>
+<tr><td><code>npm run check</code></td><td>类型检查 + lint（PI 改代码后必跑）</td></tr>
+<tr><td><code>npm run dev -w packages/agent</code></td><td>只在某个包里跑 dev</td></tr>
+</tbody>
+</table>
+<p class="tip"><code>-w</code>（workspace）参数让命令只在指定包里执行。排查单个包问题时常用。</p>
+
+<h2>5. PI 的依赖安全约定</h2>
+<p><code>AGENTS.md</code> 里强调：</p>
+<ul>
+<li>直接依赖<strong>钉死精确版本</strong>（不用 <code>^</code>、<code>~</code>）</li>
+<li>安装时用 <code>--ignore-scripts</code>，不跑第三方包的生命周期脚本（安全）</li>
+<li>锁文件 <code>package-lock.json</code> 改动需审查</li>
+</ul>
+
+<h2>6. 检验一下</h2>
+<div class="quiz">
+<div class="question" data-explain="正确。workspaces 用符号链接把本地包连进 node_modules，改源码即生效。" data-explain-wrong="npm workspaces 的核心就是符号链接本地包。">
+<p class="q">Q1 · npm workspaces 让本地包间互相引用靠的是什么？</p>
+<button class="option" data-correct="false">网络下载</button>
+<button class="option" data-correct="true">符号链接到本地源码</button>
+<button class="option" data-correct="false">复制粘贴</button>
+<button class="option" data-correct="false">数据库查询</button>
+<p class="feedback"></p>
+</div>
+
+<div class="question" data-explain="正确。coding-agent 是最上层（产品），依赖 agent，agent 依赖 ai，所以最后构建。" data-explain-wrong="构建顺序从底层到上层，coding-agent 在最上层。">
+<p class="q">Q2 · PI 构建顺序里，哪个包最后构建？</p>
+<button class="option" data-correct="false">chord</button>
+<button class="option" data-correct="false">ai</button>
+<button class="option" data-correct="false">agent</button>
+<button class="option" data-correct="true">coding-agent</button>
+<p class="feedback"></p>
+</div>
+
+<div class="question" data-explain="正确。npm run check 是 PI 改代码后必须跑的检查（类型+lint）。" data-explain-wrong="AGENTS.md 规定改代码后跑 npm run check。">
+<p class="q">Q3 · 改了 PI 代码后，按规定要跑哪个命令？</p>
+<button class="option" data-correct="false">npm test</button>
+<button class="option" data-correct="true">npm run check</button>
+<button class="option" data-correct="false">npm run build</button>
+<button class="option" data-correct="false">npm publish</button>
+<p class="feedback"></p>
+</div>
+</div>
+
+<div class="footer-nav">
+<p><strong>一手来源：</strong></p>
+<ul>
+<li><a href="../../package.json" target="_blank" rel="noopener">根 package.json</a>（workspaces、build 脚本）</li>
+<li><a href="../../AGENTS.md" target="_blank" rel="noopener">AGENTS.md</a>（依赖安全约定）</li>
+</ul>
+<p><strong>下一门：</strong><a href="pre-007-terminal-basics.html">07 · 终端基础</a>——ANSI、raw mode、stdin/stdout。</p>
+<p>回 <a href="pre-index.html">前置知识总目录</a>。有任何不清楚的地方，直接向老师提问。</p>
+</div>
+
+<script src="../assets/quiz.js"></script>
+</body>
+</html>

@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>前置 05 · Git（结合 PI 约定）</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+</head>
+<body>
+
+<p class="lesson-number">Prerequisite 05 / ★★★</p>
+<h1 class="lesson-title">Git：读 PI 代码必备的命令</h1>
+<p class="meta">约 8 分钟 · 重点是 PI 仓库实际会用到的操作 · 目标：能独立 clone、看分支、看 diff、看提交历史</p>
+
+<div class="win">
+<strong>这一课结束你会得到：</strong>会用 6 个命令解决读 PI 代码时 90% 的 Git 需求，并知道 PI 的 <code>AGENTS.md</code> 里有哪些不能踩的 Git 红线。
+</div>
+
+<h2>1. 读代码时最常用的 6 条命令</h2>
+<table>
+<thead>
+<tr><th>命令</th><th>用途</th><th>在 PI 里的典型用法</th></tr>
+</thead>
+<tbody>
+<tr><td><code>git clone &lt;url&gt;</code></td><td>克隆仓库到本地</td><td><code>git clone https://github.com/earendil-works/pi</code></td></tr>
+<tr><td><code>git branch -a</code></td><td>看所有分支（本地+远程）</td><td>确认当前在哪个分支，有哪些特性分支</td></tr>
+<tr><td><code>git log --oneline -n 20</code></td><td>看最近 20 条提交</td><td>了解最近在改什么、谁在改</td></tr>
+<tr><td><code>git show &lt;commit&gt;</code></td><td>看某次提交改了什么</td><td>理解一个功能是怎么加进来的</td></tr>
+<tr><td><code>git diff &lt;file&gt;</code></td><td>看工作区某文件相对版本库的改动</td><td>确认自己改了哪些行</td></tr>
+<tr><td><code>git status</code></td><td>看当前工作区状态</td><td>哪些文件改了、哪些暂存了</td></tr>
+</tbody>
+</table>
+
+<h2>2. 三个核心概念</h2>
+<ul>
+<li><strong>工作区</strong>：你正在编辑的文件</li>
+<li><strong>暂存区</strong>：<code>git add</code> 后、<code>git commit</code> 前的中间状态</li>
+<li><strong>版本库</strong>：已提交的历史（<code>.git</code> 目录）</li>
+</ul>
+<p>提交流程：编辑 → <code>git add 文件</code> → <code>git commit -m "描述"</code>。</p>
+
+<h2>3. PI 仓库的 Git 红线（来自 AGENTS.md）</h2>
+<p>PI 是多人协作仓库，<code>AGENTS.md</code> 明确禁止以下操作（会毁掉别人的工作）：</p>
+<ul>
+<li><code>git reset --hard</code> / <code>git checkout .</code> / <code>git clean -fd</code> / <code>git stash</code> —— 会丢失未提交修改</li>
+<li><code>git add -A</code> / <code>git add .</code> —— 会把别人的改动一起提交，必须 <code>git add 具体路径</code></li>
+<li><code>git commit --no-verify</code> —— 绕过检查</li>
+<li>不要 force push</li>
+</ul>
+<p>这些规则对人和 agent 一视同仁。读代码阶段你暂时只会用到 clone / log / diff，不会碰到这些红线，但知道它们存在很重要。</p>
+
+<h2>4. 本仓库当前状态</h2>
+<ul>
+<li>远程：<code>fatcatfy/pi</code>（fork），上游：<code>earendil-works/pi</code></li>
+<li>当前分支：<code>learn</code></li>
+</ul>
+<p>想看上游最新代码：<code>git fetch upstream</code>（需先配置 upstream remote）。</p>
+
+<h2>5. 检验一下</h2>
+<div class="quiz">
+<div class="question" data-explain="正确。git log --oneline -n 20 显示最近 20 条提交的单行摘要。" data-explain-wrong="常用查看历史的命令是 git log。">
+<p class="q">Q1 · 想看 PI 最近改了什么，用哪个命令？</p>
+<button class="option" data-correct="false">git status</button>
+<button class="option" data-correct="true">git log --oneline -n 20</button>
+<button class="option" data-correct="false">git clone</button>
+<button class="option" data-correct="false">git init</button>
+<p class="feedback"></p>
+</div>
+
+<div class="question" data-explain="正确。AGENTS.md 明确禁止 git reset --hard，会丢失未提交的工作。" data-explain-wrong="回想 PI 的 Git 红线。">
+<p class="q">Q2 · 以下哪个操作在 PI 仓库被明确禁止？</p>
+<button class="option" data-correct="false">git status</button>
+<button class="option" data-correct="false">git log</button>
+<button class="option" data-correct="true">git reset --hard</button>
+<button class="option" data-correct="false">git diff</button>
+<p class="feedback"></p>
+</div>
+
+<div class="question" data-explain="正确。git diff 看工作区相对版本库的改动。" data-explain-wrong="diff 是比较差异的命令。">
+<p class="q">Q3 · 想看自己改了某个文件的哪些行，用？</p>
+<button class="option" data-correct="true">git diff 文件名</button>
+<button class="option" data-correct="false">git show 文件名</button>
+<button class="option" data-correct="false">git status 文件名</button>
+<button class="option" data-correct="false">git log 文件名</button>
+<p class="feedback"></p>
+</div>
+</div>
+
+<div class="footer-nav">
+<p><strong>一手来源：</strong><a href="../../AGENTS.md" target="_blank" rel="noopener">AGENTS.md（Git 章节）</a></p>
+<p><strong>下一门：</strong><a href="pre-006-npm-monorepo.html">06 · npm & Monorepo</a>——workspaces 管理 10+ 包。</p>
+<p>回 <a href="pre-index.html">前置知识总目录</a>。有任何不清楚的地方，直接向老师提问。</p>
+</div>
+
+<script src="../assets/quiz.js"></script>
+</body>
+</html>

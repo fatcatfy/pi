@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>前置 04 · LLM API 概念（结合 PI 代码）</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+</head>
+<body>
+
+<p class="lesson-number">Prerequisite 04 / ★★★★</p>
+<h1 class="lesson-title">LLM API 概念：streaming、tool calling、context window、reasoning</h1>
+<p class="meta">约 12 分钟 · 用 PI 的真实类型定义解释 · 目标：读懂 PI 给模型发了什么、模型回了什么</p>
+
+<div class="win">
+<strong>这一课结束你会得到：</strong>用 PI 代码里的真实类型说清：一次 LLM 请求包含哪些部分（system prompt + messages + tools），响应为什么是流式的，tool calling 怎么工作，reasoning 是什么。
+</div>
+
+<h2>1. 一次 LLM 请求长什么样</h2>
+<p>PI 给模型的请求体由 <code>Context</code> 描述（<code>packages/ai/src/types.ts</code>）：</p>
+<pre><code>export interface Context {
+  systemPrompt?: string;   // 系统提示词：定义 agent 的角色与规则
+  messages: Message[];     // 对话历史：user / assistant / toolResult 交替
+  tools?: Tool[];          // 可调用的工具清单（模型可以选择调用）
+}</code></pre>
+<p>加上 <code>Model</code>（选哪个模型、它的参数）和鉴权信息，就构成一次完整请求。PI 在 <code>agent-loop.ts</code> 的 <code>streamAssistantResponse</code> 里组装它：</p>
+<pre><code>const llmContext: Context = {
+  systemPrompt: context.systemPrompt,
+  messages: llmMessages,
+  tools: context.tools,
+};</code></pre>
+
+<h2>2. Streaming：为什么回复是"流"出来的</h2>
+<p>LLM 生成一个回答要几千甚至几万 token，一次性返回会让用户盯着空白等几十秒。主流做法是 <strong>streaming</strong>：模型每生成一个（或一小段）token 就立刻推送，客户端逐字渲染。</p>
+<p>在 PI 里，响应被翻译成 <code>AssistantMessageEvent</code> 事件流，常见类型：</p>
+<table>
+<thead>
+<tr><th>事件</th><th>含义</th></tr>
+</thead>
+<tbody>
+<tr><td><code>start</code></td><td>响应开始，创建 partial 消息</td></tr>
+<tr><td><code>text_delta</code></td><td>新生成的文本片段（<strong>打字机效果的来源</strong>）</td></tr>
+<tr><td><code>thinking_delta</code></td><td>模型的内部推理过程（reasoning 模式）</td></tr>
+<tr><td><code>toolcall_delta</code></td><td>模型决定调用工具，参数在流式拼装</td></tr>
+<tr><td><code>done</code></td><td>响应结束，<code>result()</code> 拿到完整消息</td></tr>
+</tbody>
+</table>
+<p>agent-loop 用 <code>for await</code> 逐条消费，每来一个 <code>text_delta</code> 就广播 <code>message_update</code>，TUI 立刻把新文字画上去。</p>
+
+<h2>3. Tool Calling：模型怎么"动手"</h2>
+<p>光说话不够，agent 要能读文件、跑命令。<strong>Tool calling</strong> 是 LLM 提供的机制：</p>
+<ol>
+<li>你在请求里附上 <code>tools</code> 清单（每个工具含 name、description、参数的 JSON schema）</li>
+<li>模型判断需要动手时，不直接输出文字，而是输出一个 <code>toolCall</code>：<code>{ name, arguments }</code></li>
+<li>你的代码执行这个工具，把结果作为 <code>toolResult</code> 消息发回</li>
+<li>模型看到结果，继续生成回答或再调下一个工具</li>
+</ol>
+<p>PI 里这个循环就在 <code>agent-loop.ts</code>：抽出 <code>message.content.filter(c =&gt; c.type === "toolCall")</code>，执行，把结果 push 回上下文，再调一次模型。<strong>tool calling 是 agent 能"做事"的核心机制。</strong></p>
+
+<h2>4. Context Window：模型能记住多少</h2>
+<p>每个模型有一个 <strong>context window</strong>（上下文窗口）——一次请求里 system prompt + 历史消息 + 工具定义 + 输出 加起来不能超过的 token 上限。PI 的 <code>Model</code> 类型里有：</p>
+<pre><code>contextWindow: number;   // 输入+输出总 token 上限
+maxTokens: number;       // 单次输出 token 上限</code></pre>
+<p>当对话越来越长，总 token 逼近窗口上限时，PI 会触发 <strong>compaction</strong>（压缩）：把早期对话总结成一段摘要替换掉，腾出空间。这就是 <code>transformContext</code> 钩子做的事。</p>
+<div class="warn"><strong>第 2 课提到过的细节：</strong>如果模型输出被 token 上限截断（<code>stopReason === "length"</code>），PI 会让该轮所有 tool call 直接失败——因为截断的 JSON 参数可能不完整，执行有风险。</div>
+
+<h2>5. Reasoning：模型的"思考过程"</h2>
+<p>一些模型（如 o1、Claude thinking）支持 <strong>reasoning</strong>——在给出最终答案前，先输出一段内部推理（不直接作为回答）。PI 用 <code>thinkingLevel</code> 控制强度：</p>
+<pre><code>export type ThinkingLevel = "minimal" | "low" | "medium" | "high" | "xhigh" | "max";</code></pre>
+<p>开启后，模型响应里会出现 <code>thinking_delta</code> 事件（推理文本），与 <code>text_delta</code>（最终回答）分开。PI 把推理过程单独渲染，让用户看到模型"在想什么"。推理也消耗 token，所以 PI 有 <code>thinkingBudgets</code> 来限制每轮推理的 token 量，避免推理把整个输出额度吃光。</p>
+
+<h2>6. 检验一下</h2>
+<div class="quiz">
+<div class="question" data-explain="正确。system prompt + messages + tools 构成一次请求的核心。" data-explain-wrong="回想 Context 接口的三个字段。">
+<p class="q">Q1 · PI 发给模型的一次请求体（Context）不包含以下哪项？</p>
+<button class="option" data-correct="false">systemPrompt</button>
+<button class="option" data-correct="false">messages</button>
+<button class="option" data-correct="false">tools</button>
+<button class="option" data-correct="true">database</button>
+<p class="feedback"></p>
+</div>
+
+<div class="question" data-explain="正确。tool calling 的机制就是：模型输出 toolCall，代码执行，把 toolResult 发回，模型继续。" data-explain-wrong="回想 tool calling 的四步流程。">
+<p class="q">Q2 · 模型决定调用工具后，PI 做的关键一步是？</p>
+<button class="option" data-correct="false">直接把工具名显示给用户</button>
+<button class="option" data-correct="true">执行工具并把 toolResult 追加进上下文</button>
+<button class="option" data-correct="false">清空对话历史</button>
+<button class="option" data-correct="false">切换到另一个模型</button>
+<p class="feedback"></p>
+</div>
+
+<div class="question" data-explain="正确。context window 是输入+输出的总 token 上限，对话过长会触发 compaction。" data-explain-wrong="context window 限制的是 token 总量，不是文件数或时间。">
+<p class="q">Q3 · 对话太长超过 context window 时，PI 会？</p>
+<button class="option" data-correct="false">自动删除最近的消息</button>
+<button class="option" data-correct="true">触发 compaction 压缩早期对话</button>
+<button class="option" data-correct="false">直接报错退出</button>
+<button class="option" data-correct="false">忽略 system prompt</button>
+<p class="feedback"></p>
+</div>
+</div>
+
+<div class="footer-nav">
+<p><strong>一手来源（PI 真实代码）：</strong></p>
+<ul>
+<li><a href="../../packages/ai/src/types.ts" target="_blank" rel="noopener">packages/ai/src/types.ts</a>（Context、Model、ThinkingLevel 类型定义）</li>
+<li><a href="../../packages/agent/src/agent-loop.ts" target="_blank" rel="noopener">packages/agent/src/agent-loop.ts</a>（tool calling 循环、length 截断处理）</li>
+<li><a href="../../packages/agent/src/agent.ts" target="_blank" rel="noopener">packages/agent/src/agent.ts</a>（thinkingLevel、thinkingBudgets）</li>
+</ul>
+<p><strong>下一门：</strong><a href="pre-005-git.html">05 · Git</a>——clone、branch、diff、log，读 PI 代码必备。</p>
+<p>回 <a href="pre-index.html">前置知识总目录</a>。有任何不清楚的地方，直接向老师提问。</p>
+</div>
+
+<script src="../assets/quiz.js"></script>
+</body>
+</html>
