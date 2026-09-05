@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>第一课 · 仓库地图：pi 是什么、它怎么分层、从哪里读起</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+</head>
+<body>
+
+<p class="lesson-number">Lesson 1 / Series: pi 架构入门</p>
+<h1 class="lesson-title">仓库地图：pi 是什么、它怎么分层、从哪里读起</h1>
+<p class="meta">约 10 分钟 · 面向 TS/Node 初学者 · 目标：脑子里装下一张仓库地图</p>
+
+<div class="win">
+<strong>这一课结束你会得到：</strong>① 一张三层结构的仓库地图；② 三个"先读这里"的入口文件；③ 以后遇到任何名词（session、tool、provider…）都知道去哪个包找答案。
+</div>
+
+<h2>1. 一句话：pi 是什么</h2>
+<p>pi（Pi Agent Harness）是一个<strong>极简的终端 AI 编程代理</strong>。你在项目目录里敲 <code>pi</code>，它启动一个交互式终端界面（TUI），由大语言模型驱动，能读文件、改文件、跑命令，把一轮轮的对话组织成可保存、可恢复、可分支的 session（会话）。核心刻意保持小，靠 TypeScript 扩展、skills、prompt 模板和主题来扩展。</p>
+<p>它是"产品"的那部分叫 <strong>coding-agent</strong>；在它下面还垫了两层库（运行时、基础），这三层构成本仓库的全部。<em>（依据：仓库 README 与 <code>packages/coding-agent/docs/index.md</code>）</em></p>
+
+<h2>2. 三层地图</h2>
+<figure class="diagram">
+<svg viewBox="0 0 760 470" role="img" aria-label="pi 三层结构图" xmlns="http://www.w3.org/2000/svg" style="font-family:ui-monospace,Menlo,Consolas,monospace;">
+<defs>
+<marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" fill="#8a8a80"/>
+</marker>
+</defs>
+
+<rect x="230" y="26" width="300" height="96" rx="10" fill="#f7eef0" stroke="#d9b8c0"/>
+<text x="250" y="52" font-size="14" font-weight="bold" fill="#8a3a3a">① 应用层 Application</text>
+<text x="250" y="78" font-size="12.5" fill="#333">coding-agent（pi-coding-agent）</text>
+<text x="250" y="100" font-size="12.5" fill="#333">TUI · CLI · 内置工具 · sessions · 扩展/技能</text>
+
+<rect x="150" y="186" width="460" height="96" rx="10" fill="#eef4ec" stroke="#c2d4be"/>
+<text x="170" y="212" font-size="14" font-weight="bold" fill="#4c7149">② 运行时层 Runtime</text>
+<text x="170" y="238" font-size="12.5" fill="#333">agent（pi-agent-core）</text>
+<text x="170" y="260" font-size="12.5" fill="#333">主循环 · 工具调用 · 会话状态（不依赖具体模型）</text>
+
+<rect x="40" y="346" width="680" height="96" rx="10" fill="#f4f1e6" stroke="#d8cfae"/>
+<text x="60" y="372" font-size="14" font-weight="bold" fill="#7a5a1e">③ 基础层 Foundations</text>
+<text x="60" y="398" font-size="12.5" fill="#333">ai（LLM 供应商） · tui（终端 UI） · telemetry（遥测） · chord（服务/RPC）</text>
+<text x="60" y="420" font-size="12.5" fill="#333">protocol / client / server（JSONL RPC） · session-backends/sqlite-node（会话存储）</text>
+
+<line x1="380" y1="122" x2="380" y2="178" stroke="#8a8a80" stroke-width="2" marker-end="url(#arr)"/>
+<text x="392" y="156" font-size="11" fill="#8a8a80">调用</text>
+<line x1="380" y1="282" x2="380" y2="338" stroke="#8a8a80" stroke-width="2" marker-end="url(#arr)"/>
+<text x="392" y="316" font-size="11" fill="#8a8a80">调用</text>
+</svg>
+<figcaption>依赖向上叠：上层调用下层，下层完全不知道上层的存在。</figcaption>
+</figure>
+
+<ul>
+<li><strong>③ 基础层</strong>是一批小库：<code>ai</code> 把 OpenAI / Anthropic / Google 等各家 LLM 供应商统一成一个 API；<code>tui</code> 是终端渲染库；<code>telemetry</code> 是遥测契约；<code>chord</code> 是服务 + RPC + 复制状态的基础运行时；<code>protocol / client / server</code> 是客户端与服务端之间的 JSONL RPC 三件套；<code>session-backends/sqlite-node</code> 负责把会话存进 SQLite。</li>
+<li><strong>② 运行时层</strong>只有 <code>agent</code> 一个包：与具体模型、具体界面无关的 agent 运行时——主循环（调模型 → 决定调工具 → 拿到结果 → 继续），以及工具调用与会话状态管理。</li>
+<li><strong>① 应用层</strong>只有 <code>coding-agent</code> 一个包：你敲的 <code>pi</code> 在这里。它负责 TUI、CLI、内置工具（读/写/跑命令）、会话管理和扩展加载——是唯一有"产品形态"的包。</li>
+</ul>
+<p>另有 <code>evals</code>（跑 benchmark 的评估包）不在主链路上，理解架构时可以先跳过。</p>
+
+<h2>3. 包一览表</h2>
+<table>
+<thead>
+<tr><th>包（目录）</th><th>一句话职责</th><th>学习顺序</th></tr>
+</thead>
+<tbody>
+<tr><td><code>packages/coding-agent</code></td><td>交互式编程代理 CLI（<code>pi</code> 命令）</td><td>第一站（产品面）</td></tr>
+<tr><td><code>packages/agent</code></td><td>agent 运行时：主循环、工具调用、会话状态</td><td>第二站（核心）</td></tr>
+<tr><td><code>packages/ai</code></td><td>统一多家 LLM 供应商 API</td><td>第三站（核心）</td></tr>
+<tr><td><code>packages/session-backends/sqlite-node</code></td><td>会话持久化（SQLite）</td><td>后续</td></tr>
+<tr><td><code>packages/protocol · client · server</code></td><td>JSONL RPC 三件套</td><td>后续</td></tr>
+<tr><td><code>packages/chord</code></td><td>服务 + RPC + 复制状态基础运行时</td><td>后续</td></tr>
+<tr><td><code>packages/tui</code></td><td>终端 UI 渲染库（差分渲染）</td><td>后续</td></tr>
+<tr><td><code>packages/telemetry</code></td><td>遥测契约与参考实现</td><td>后续</td></tr>
+<tr><td><code>packages/evals</code></td><td>benchmark / 评估测试</td><td>暂跳过</td></tr>
+</tbody>
+</table>
+<p>真实的构建顺序也等于理解顺序（来自根 <code>package.json</code> 的 build 脚本）：</p>
+<pre><code>chord → tui → telemetry → ai → agent → session-backends/sqlite-node
+→ protocol → client → server → coding-agent</code></pre>
+<p>越靠左越"底"，越靠右越接近用户。读代码时顺着这条链从下往上走，依赖最干净。</p>
+
+<h2>4. 三个"先读这里"</h2>
+<ol>
+<li><strong><code>packages/coding-agent/src/cli.ts</code></strong>（入口）—— <code>package.json</code> 里 <code>"bin": {"pi": "dist/bundle/cli.js"}</code>，源码入口就在 <code>src/cli.ts</code>。想追"敲下 <code>pi</code> 之后发生了什么"就从这里开始。</li>
+<li><strong><code>packages/agent/src/agent-loop.ts</code></strong>（主循环）—— 想理解"agent 是怎么转起来的"，读它。下一课我们会全程走一遍。</li>
+<li><strong><code>packages/coding-agent/docs/index.md</code></strong>（文档索引）—— 26+ 篇文档的总入口。建议顺序：<code>index</code> → <code>quickstart</code> → <code>sessions</code> → <code>extensions</code>。</li>
+</ol>
+
+<div class="warn">
+<strong>别踩的坑：</strong><code>packages/ai/src/models.generated.ts</code> 是一个由脚本生成的超大文件（各家模型的元数据目录），仓库规则明确禁止手改。第一遍读代码时不要从它开始，会被淹没。
+</div>
+
+<h2>5. 一条建议的读库路径</h2>
+<ol>
+<li>先读文档建立手感：<code>docs/index.md</code> + <code>quickstart.md</code>（现在）。</li>
+<li>把它跑起来：按根 README 的 Development 命令本地构建，再用 <code>./pi-test.sh</code> 启动。</li>
+<li>自顶向下追一次会话：coding-agent → agent → ai（下一课一起走一遍"一次输入怎么变成一次模型调用"）。</li>
+<li>任何不清楚的地方，随时向老师（本 agent）提问——每课末尾都欢迎 follow-up。</li>
+</ol>
+
+<h2>6. 检验一下</h2>
+<div class="quiz">
+<div class="question" data-explain="正确。coding-agent 才是那个产品形态的包。" data-explain-wrong="想一想：哪个包有 bin 入口、是产品形态？">
+<p class="q">Q1 · <code>pi</code> 命令（CLI 入口）实现在哪个包？</p>
+<button class="option" data-correct="true">packages/coding-agent</button>
+<button class="option" data-correct="false">packages/agent</button>
+<button class="option" data-correct="false">packages/ai</button>
+<button class="option" data-correct="false">packages/chord</button>
+<p class="feedback"></p>
+</div>
+
+<div class="question" data-explain="正确。agent 管主循环与工具调用，ai 管模型调用。" data-explain-wrong="回想三层地图里 ② 和 ③ 各自的职责。">
+<p class="q">Q2 · 下面哪个是 agent 与 ai 两个包的职责分工？</p>
+<button class="option" data-correct="false">存储/界面渲染</button>
+<button class="option" data-correct="true">主循环/模型调用</button>
+<button class="option" data-correct="false">传输/主题样式</button>
+<button class="option" data-correct="false">插件/会话文件</button>
+<p class="feedback"></p>
+</div>
+
+<div class="question" data-explain="正确。sessions.md 讲会话管理（创建/切换/分支）。" data-explain-wrong="这份文档主要讲会话管理，猜猜篇名。">
+<p class="q">Q3 · 想了解会话管理（创建 / 切换 / 分支），应打开 coding-agent/docs 里的哪一篇？</p>
+<button class="option" data-correct="true">sessions.md</button>
+<button class="option" data-correct="false">themes.md</button>
+<button class="option" data-correct="false">usage.md</button>
+<button class="option" data-correct="false">models.md</button>
+<p class="feedback"></p>
+</div>
+</div>
+
+<div class="footer-nav">
+<p><strong>推荐的第一手来源：</strong></p>
+<ul>
+<li>官方文档索引（仓库内）：<code>packages/coding-agent/docs/index.md</code></li>
+<li>线上文档：<a href="https://pi.dev/docs/latest">pi.dev/docs/latest</a></li>
+<li>项目 README：<code>README.md</code>（根目录）</li>
+<li>词汇表：<a href="../reference/0001-repo-glossary.html">参考 · 仓库术语表</a>（后续所有课共用的词典）</li>
+</ul>
+<p><strong>下一课预告：</strong>0002《一次提示词的旅程》——跟着 <code>agent-loop.ts</code> 走一遍"用户输入 → 模型调用 → 工具结果"的完整循环。</p>
+<p>有任何不清楚的地方，直接向老师提问。</p>
+</div>
+
+<p class="footnote">本工作区是 fork（fatcatfy/pi，分支 learn），上游是 <a href="https://github.com/earendil-works/pi">earendil-works/pi</a>。内容以本仓库实际代码为准。</p>
+
+<script src="../assets/quiz.js"></script>
+</body>
+</html>

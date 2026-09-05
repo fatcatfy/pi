@@ -1,0 +1,18 @@
+# NOTES
+
+- 教学语言：中文（用户明确要求）
+- 用户背景：TS/Node 初学者，教学节奏应先概念、后细节
+- 学习目标：理解架构优先；当前暂不深入单个包内部实现
+- 教学 workspace 目录约定（teach skill）：
+  - `lessons/*.html` 每课一个自包含 HTML
+  - `reference/*.html` 压缩的参考文档（词汇表等），长期反复查阅
+  - `assets/` 共享组件（样式表、quiz 组件）
+  - `learning-records/*.md` 记录用户学到的重要 insights（0001- 编号递增）
+  - `MISSION.md` 学习动机（compass 角色，保持短）
+- 已建课：`lessons/0001-repo-orientation.html`（仓库地图）
+- 已建参考：`reference/0001-repo-glossary.html`（术语表，之后所有课须遵守）
+- 仓库事实备忘：
+  - remote 是 fork `fatcatfy/pi`（分支 `learn`）；上游 `earendil-works/pi`
+  - 依赖/构建顺序（根 package.json build 脚本）：chord → tui → telemetry → ai → agent → session-backends/sqlite-node → protocol → client → server → coding-agent
+  - `pi` bin → dist/bundle/cli.js，源码入口 packages/coding-agent/src/cli.ts
+  - packages/ai/src/models.generated.ts 是生成文件，勿手改

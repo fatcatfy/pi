@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>参考 · pi 仓库术语表</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+</head>
+<body>
+
+<p class="lesson-number">Reference 0001</p>
+<h1 class="lesson-title">pi 仓库术语表（Glossary）</h1>
+<p class="meta">压缩的速查文档 · 之后所有 lesson 都以此词汇表为准（glossary 是权威，别词）</p>
+
+<h2>项目与仓库</h2>
+<table>
+<thead>
+<tr><th>术语</th><th>含义</th></tr>
+</thead>
+<tbody>
+<tr><td>pi / Pi Agent Harness</td><td>项目总称：一个极简的终端 AI 编程代理 harness（本仓库）。</td></tr>
+<tr><td>pi-monorepo</td><td>根 <code>package.json</code> 里 <code>workspaces</code> 字段声明的包集合。</td></tr>
+<tr><td>monorepo</td><td>一个 git 仓库管理多个 package；本仓库用 npm workspaces 链接本地包。</td></tr>
+<tr><td>npm workspaces</td><td>让 <code>packages/*</code> 里的包互相引用时用本地源码，不重复安装。</td></tr>
+</tbody>
+</table>
+
+<h2>包（构建顺序：从底到顶）</h2>
+<table>
+<thead>
+<tr><th>包</th><th>一句话职责</th></tr>
+</thead>
+<tbody>
+<tr><td><code>@earendil-works/chord</code></td><td>应用组合运行时：services、复制状态、RPC、插件。</td></tr>
+<tr><td><code>@earendil-works/pi-tui</code></td><td>终端 UI 库（差分渲染）。</td></tr>
+<tr><td><code>@earendil-works/pi-telemetry</code></td><td>供应商中立的遥测契约与参考实现。</td></tr>
+<tr><td><code>@earendil-works/pi-ai</code></td><td>统一多供应商 LLM API（OpenAI、Anthropic、Google…）。</td></tr>
+<tr><td><code>@earendil-works/pi-agent-core</code></td><td>agent 运行时：主循环、工具调用、会话状态管理。</td></tr>
+<tr><td><code>@earendil-works/pi-session-backends-*</code></td><td>会话持久化后端（如 <code>sqlite-node</code>）。</td></tr>
+<tr><td><code>@earendil-works/pi-protocol</code></td><td>客户端与服务器之间 JSONL RPC 协议定义。</td></tr>
+<tr><td><code>@earendil-works/pi-client</code></td><td>RPC 客户端（连到 server）。</td></tr>
+<tr><td><code>@earendil-works/pi-server</code></td><td>RPC 服务器（跑 agent 会话）。</td></tr>
+<tr><td><code>@earendil-works/pi-coding-agent</code></td><td>交互式编程代理 CLI，也就是 <code>pi</code> 命令（产品面）。</td></tr>
+<tr><td><code>evals</code></td><td>benchmark / 评估测试包（不在主链路）。</td></tr>
+</tbody>
+</table>
+
+<h2>核心概念</h2>
+<table>
+<thead>
+<tr><th>术语</th><th>含义</th></tr>
+</thead>
+<tbody>
+<tr><td>agent loop（主循环）</td><td>模型决策 → 工具调用 → 观察结果 → 继续，直到任务完成。</td></tr>
+<tr><td>tool（工具）</td><td>agent 可执行的操作：读文件、写文件、跑 bash 等。</td></tr>
+<tr><td>session（会话）</td><td>一次对话从创建到结束的工作区状态；可保存、恢复、分支。</td></tr>
+<tr><td>provider（供应商）</td><td>对某一家 LLM API 的适配（鉴权、请求/响应转换）。</td></tr>
+<tr><td>extension（扩展）</td><td>用 TypeScript 写的可加载模块（工具、命令、事件、自定义 UI）。</td></tr>
+<tr><td>skill</td><td>可复用能力包（以 <code>SKILL.md</code> 声明的按需技能）。</td></tr>
+<tr><td>prompt template</td><td>由斜杠命令展开的复用提示模板。</td></tr>
+<tr><td>TUI</td><td>Terminal User Interface，终端用户界面。</td></tr>
+<tr><td>LLM</td><td>大语言模型。</td></tr>
+<tr><td>JSONL</td><td>每行一个 JSON 对象的文本格式；session 文件和 RPC 流都用它。</td></tr>
+<tr><td>model catalog（模型目录）</td><td><code>ai</code> 包维护的模型元数据（<code>models.generated.ts</code>，生成文件，勿手改）。</td></tr>
+</tbody>
+</table>
+
+<div class="footer-nav">
+<p>回到第一课：<a href="../lessons/0001-repo-orientation.html">Lesson 1 · 仓库地图</a></p>
+<p>有任何不清楚的术语，向老师提问。</p>
+</div>
+
+</body>
+</html>
