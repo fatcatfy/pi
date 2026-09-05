@@ -13,6 +13,8 @@
 - 已建课：`lessons/0002-prompt-to-model-call.html`（输入→模型调用→输出的完整链路）
 - 已建参考：`reference/0001-repo-glossary.html`（术语表，之后所有课须遵守）
 - 已建参考：`reference/0002-request-flow.html`（请求数据流 10 步速查）
+- 已建参考：`reference/0003-debug-breakpoints.html`（VS Code 断点调试观察表，13 个断点，行号已对照本仓库验证）
+- 调试实践（2026-09-05）：`.vscode/launch.json` 已创建；发现模型数据缺失坑——需先 `npm --prefix packages/ai run hydrate-model-data` 生成 `.manifest.json`；`npx tsx src/cli.ts --help` 已验证跑通
 - 下一课候选：`0003` 工具调用深入（read/write/bash 实现、before/afterToolCall 钩子）
 - **前置知识系列（pre-*）**已完成 7 门，全部锚定 PI 真实代码：
   - `pre-index.html` 总目录（按 ★ 排序）

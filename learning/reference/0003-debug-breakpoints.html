@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>参考 · VS Code 断点调试观察表</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+</head>
+<body>
+
+<p class="lesson-number">Reference 0003</p>
+<h1 class="lesson-title">VS Code 断点调试：关键断点位置观察表</h1>
+<p class="meta">依据 pi-doc.com/setup-and-debug 第四步，已对照本仓库（fork learn 分支）实际代码验证行号 · 实践日期 2026-09-05</p>
+
+<div class="win">
+<strong>实践结果：</strong>依赖已装、模型数据已生成、<code>npx tsx packages/coding-agent/src/cli.ts --help</code> 已跑通，入口可用。
+</div>
+
+<h2>0. 调试配置（.vscode/launch.json）</h2>
+<p>已创建于仓库根目录 <code>.vscode/launch.json</code>，包含两个配置：</p>
+<ol>
+<li><strong>Debug Pi Interactive</strong>：<code>tsx</code> 运行 <code>src/cli.ts</code>，无参数，集成终端 + 可选 ANTHROPIC_API_KEY</li>
+<li><strong>Debug Pi Print Mode</strong>：<code>tsx</code> 运行 <code>src/cli.ts -p "Summarize this repo"</code>，非交互</li>
+</ol>
+
+<div class="warn">
+<strong>本仓库实际遇到的坑（文档未提）：</strong>首次运行会报 <code>ERR_MODULE_NOT_FOUND ... providers/data/.manifest.json</code>——模型目录数据是生成文件，未提交。需先执行：<code>npm --prefix packages/ai run hydrate-model-data</code>（生成各 provider 的 <code>*.json</code> 与 <code>.manifest.json</code>）。
+</div>
+
+<h2>1. 断点链路总览</h2>
+<p>一次交互输入的完整调用链，从敲下 <code>pi</code> 到模型返回：</p>
+<pre><code>cli.ts → main.ts → agent-session-services.ts（组装服务）
+       → agent-session-runtime.ts（Runtime）
+       → interactive-mode.ts run() → getUserInput()
+       → agent-session.ts prompt()
+       → agent-loop.ts runAgentLoop → streamAssistantResponse（LLM）
+       → executeToolCalls（工具）→ ... 循环
+       → 返回渲染</code></pre>
+
+<h2>2. 关键断点位置观察表</h2>
+<table>
+<thead>
+<tr><th>#</th><th>断点位置</th><th>文件:行号</th><th>观察什么</th><th>怎么触发</th></tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>CLI 入口</td>
+<td><code>src/cli.ts:27</code> <code>main(process.argv.slice(2))</code></td>
+<td><code>process.argv</code>：原始参数数组；内部角色分派（server / session-worker / 主流程）</td>
+<td>启动任意调试配置第一步命中；打印模式看 <code>["-p","..."]</code></td>
+</tr>
+<tr>
+<td>2</td>
+<td>主流程开始</td>
+<td><code>src/main.ts:675</code> <code>export async function main</code></td>
+<td>解析出的参数对象、<code>appMode</code>（interactive/print/rpc）、stdinTTY 判定</td>
+<td>Debug 配置启动即命中</td>
+</tr>
+<tr>
+<td>3</td>
+<td>模式判定</td>
+<td><code>src/main.ts:752</code> <code>resolveAppMode(...)</code></td>
+<td><code>appMode</code> 取值与其判定依据（<code>process.stdin.isTTY</code> 等）</td>
+<td>启动后紧跟第 2 点命中</td>
+</tr>
+<tr>
+<td>4</td>
+<td>服务组装</td>
+<td><code>src/core/agent-session-services.ts:135</code> <code>createAgentSessionServices</code></td>
+<td>ModelRuntime、SettingsManager、ResourceLoader、SessionManager 等服务的组装顺序与依赖</td>
+<td>交互/打印模式初始化会话依赖时</td>
+</tr>
+<tr>
+<td>5</td>
+<td>Runtime 创建</td>
+<td><code>src/core/agent-session-runtime.ts:422</code> <code>createAgentSessionRuntime</code></td>
+<td>运行时生命周期对象：session、事件订阅、清理逻辑</td>
+<td>服务组装完成后</td>
+</tr>
+<tr>
+<td>6</td>
+<td>TUI 主循环</td>
+<td><code>src/modes/interactive/interactive-mode.ts:1034</code> <code>async run()</code></td>
+<td>TUI 初始化参数、事件订阅列表</td>
+<td>Debug Pi Interactive + 输入会话</td>
+</tr>
+<tr>
+<td>7</td>
+<td>等待输入</td>
+<td><code>src/modes/interactive/interactive-mode.ts:1133</code> <code>await this.getUserInput()</code></td>
+<td>返回的 <code>userInput</code> 字符串；之前的命令解析（斜杠命令/多行）</td>
+<td>在 TUI 输入一行文字回车</td>
+</tr>
+<tr>
+<td>8</td>
+<td>消息发送</td>
+<td><code>src/core/agent-session.ts:1159</code> <code>async prompt(text)</code></td>
+<td>消息预处理：skill 展开、扩展拦截（<code>beforePrompt</code> 钩子）、constructPrompt 后进入 agent</td>
+<td>回车提交消息后</td>
+</tr>
+<tr>
+<td>9</td>
+<td>进入 Agent</td>
+<td><code>src/core/agent-session.ts:1108</code> <code>await this.agent.prompt(messages)</code></td>
+<td><code>messages</code>：构造好的 AgentMessage[]；此刻跨入 pi-agent-core</td>
+<td>紧跟第 8 点</td>
+</tr>
+<tr>
+<td>10</td>
+<td>★ Agent 核心循环</td>
+<td><code>packages/agent/src/agent-loop.ts:96</code> <code>runAgentLoop</code></td>
+<td>主循环入口：prompts、初始上下文、事件流创建</td>
+<td>每次消息进入 agent 循环</td>
+</tr>
+<tr>
+<td>11</td>
+<td>★ LLM 调用边界</td>
+<td><code>packages/agent/src/agent-loop.ts:279</code> <code>streamAssistantResponse</code></td>
+<td><code>llmContext</code>（systemPrompt+messages+tools）、<code>config.model</code>、<code>streamFn</code> 实参（apiKey/signal）；这是"模型真正被调用"的点</td>
+<td>内层循环每一轮</td>
+</tr>
+<tr>
+<td>12</td>
+<td>工具执行</td>
+<td><code>packages/agent/src/agent-loop.ts:409</code> <code>executeToolCalls</code></td>
+<td>抽出的 toolCalls、参数校验、beforeToolCall 钩子返回值</td>
+<td>模型返回 toolCall 后</td>
+</tr>
+<tr>
+<td>13</td>
+<td>认证解析</td>
+<td><code>src/core/model-runtime.ts:168</code> <code>this.models = createModels({...})</code></td>
+<td>凭据来源：CredentialStore / 环境变量 / runtime 覆盖；<code>auth</code> Map 快照</td>
+<td>模型调用前首次解析凭据</td>
+</tr>
+</tbody>
+</table>
+
+<h2>3. 建议的最小实践路径（只打 4 个点）</h2>
+<p>初学者不必 13 个点全打，这条路径能覆盖"输入→模型→工具"主线，每步都能确认上一课学的链路：</p>
+<ol>
+<li>打 <strong>#8</strong>（prompt 预处理）→ 看到消息怎么构造、skill 怎么展开</li>
+<li>打 <strong>#10</strong>（runAgentLoop 入口）→ 跨入核心循环</li>
+<li>打 <strong>#11</strong>（streamAssistantResponse）→ 看到发给模型的 llmContext，验证第 2 课内容</li>
+<li>打 <strong>#12</strong>（executeToolCalls）→ 看到工具调用如何被执行（含 beforeToolCall 钩子）</li>
+</ol>
+<div class="tip">打印模式（<code>-p "..."</code>）不需要 TUI 交互即可走到 #10/#11，适合首次验证断点链路。交互模式（Debug Pi Interactive）适合看 #7 输入与工具真实执行。</div>
+
+<h2>4. 观察技巧</h2>
+<ul>
+<li>大对象用 <code>import { inspect } from "node:util"</code> + <code>console.log(inspect(obj, {depth:3, colors:true}))</code>，调试完删除</li>
+<li>流式事件观察：在 <code>streamAssistantResponse</code> 的 <code>for await</code> 循环体里断点，看 <code>event.type</code> 变化（text_delta → … → done）</li>
+<li>打断点于 <code>agent-session.ts:1108</code> 可同时确认 <code>AgentMessage</code> 结构与第 2 课的 <code>convertToLlm</code> 边界</li>
+</ul>
+
+<h2>5. 本仓库与文档的差异速记</h2>
+<table>
+<thead>
+<tr><th>文档（v0.80.10）</th><th>本 fork（learn 分支）</th></tr>
+</thead>
+<tbody>
+<tr><td>包管理 pnpm</td><td>npm workspaces（根 package.json）</td></tr>
+<tr><td>模型数据已随仓库</td><td>需先 <code>npm --prefix packages/ai run hydrate-model-data</code> 生成</td></tr>
+<tr><td><code>cli.ts</code> 直接调 main</td><td><code>cli.ts:9-17</code> 先做内部角色分派（server/session-worker），再调 main</td></tr>
+<tr><td>认证解析在 model-runtime.ts 函数级</td><td><code>ModelRuntime</code> 类（130 行），<code>createModels</code>（168 行）+ 凭据解析（277-297 行）</td></tr>
+</tbody>
+</table>
+
+<div class="footer-nav">
+<p>关联：<a href="0002-request-flow.html">请求数据流速查</a> · <a href="../lessons/0002-prompt-to-model-call.html">Lesson 2</a> · <a href="../lessons/pre-002-async-await-promise.html">前置 02 async/await</a></p>
+<p>有任何不清楚的地方，直接向老师提问。</p>
+</div>
+
+</body>
+</html>
