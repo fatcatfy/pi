@@ -147,14 +147,92 @@
 </ol>
 <div class="tip">打印模式（<code>-p "..."</code>）不需要 TUI 交互即可走到 #10/#11，适合首次验证断点链路。交互模式（Debug Pi Interactive）适合看 #7 输入与工具真实执行。</div>
 
-<h2>4. 观察技巧</h2>
+<h2>6. 本环境实测：CDP 断点链路数据（真实调用 DeepSeek）</h2>
+<p>沙箱里无法开 VS Code，改用 CDP（Chrome DevTools Protocol）直连 <code>node --inspect-brk</code> 实际跑了一次 <code>pi -p "Summarize this repo" --model deepseek-v4-flash</code>。
+tsx/esbuild 会把代码压缩成极少数超长行，按下述方法把断点精确钉到字节列，再逐点恢复执行并求值表达式。完整脚本与日志：<code>learning/.tmp/pi-cdp-trace.mjs</code>、<code>pi-cdp-trace.jsonl</code>。</p>
+
+<div class="warn">
+<strong>关键技术点（写进你的断点调试笔记）：</strong>esbuild 压缩后的文件只有 3~10 行，V8 的"行断点"会整体落到模块顶部（表现为作用域只有 <code>module/global</code>、所有变量 ReferenceError）。
+正确做法：从 <code>Debugger.getScriptSource</code> 里提取内联 base64 sourcemap，用 <code>generatedPositionFor(..., LEAST_UPPER_BOUND)</code> 把<em>源码行+列</em>映射成<em>生成代码精确 line:column</em>，再用该列打断点；断点必须落在<strong>函数体内首条语句</strong>（打在函数声明行时，参数还没绑定，同样 ReferenceError）。
+</div>
+
+<table>
+<thead>
+<tr><th>#</th><th>文档表编号</th><th>实际位置（源码行）</th><th>实测数据（一次打印模式运行）</th></tr>
+</thead>
+<tbody>
+<tr>
+<td>BP1</td><td>#1</td>
+<td><code>cli.ts:27</code> <code>main(process.argv.slice(2))</code></td>
+<td><code>["-p","Summarize this repo","--model","deepseek-v4-flash"]</code> —— 原始 argv 原样透传</td>
+</tr>
+<tr>
+<td>BP2</td><td>#2</td>
+<td><code>main.ts:676</code> <code>resetTimings();</code>（main 函数体首行）</td>
+<td><code>{"parsed":["-p",…,"--model","deepseek-v4-flash"],"argCount":4}</code> —— 参数已解析进 <code>args[]</code>，函数作用域 <code>local:main</code></td>
+</tr>
+<tr>
+<td>BP3</td><td>#3</td>
+<td><code>main.ts:753</code> <code>const shouldTakeOverStdout = appMode !== "interactive"</code></td>
+<td><code>{"appMode":"print"}</code> —— 非 TTY + <code>-p</code> 判定为 print 模式（isTTY=false，故 JSON 中省略）</td>
+</tr>
+<tr>
+<td>BP4</td><td>#4</td>
+<td><code>agent-session-services.ts:138</code> <code>const cwd = resolvePath(options.cwd)</code></td>
+<td><code>{"fn":"createAgentSessionServices","hasOpts":true,"models":false,"settings":false}</code> —— 服务按需惰性创建，此时 provider/settings 尚未实例化</td>
+</tr>
+<tr>
+<td>BP5</td><td>#5</td>
+<td><code>agent-session-runtime.ts:431</code> <code>assertSessionCwdExists(options.sessionManager, options.cwd)</code></td>
+<td><code>{"fn":"createAgentSessionRuntime","hasCreateRuntime":true,"cwd":"/workspace"}</code> —— Runtime 绑定 cwd 与 SessionManager</td>
+</tr>
+<tr>
+<td>BP6</td><td>#8</td>
+<td><code>agent-session.ts:1160</code> <code>const expandPromptTemplates = options?.expandPromptTemplates ?? true</code></td>
+<td><code>{"method":"prompt","text":"Summarize this repo","hasOptions":true}</code> —— 用户输入原样进入 prompt 预处理</td>
+</tr>
+<tr>
+<td>BP7</td><td>#9</td>
+<td><code>agent-session.ts:1108</code> <code>await this.agent.prompt(messages)</code></td>
+<td><code>[{"role":"user","contentTypes":["text"],"ts":1788629691692}]</code> —— messages 已构造为 AgentMessage[]，跨入 pi-agent-core</td>
+</tr>
+<tr>
+<td>BP8</td><td>#10</td>
+<td><code>agent-loop.ts:104</code> <code>const newMessages: AgentMessage[] = [...prompts]</code></td>
+<td><code>{"fn":"runAgentLoop","promptCount":1,"msgCountPre":0,"toolCount":4}</code> —— 首次进入：1 条 prompt、无历史、注入 4 个内置工具</td>
+</tr>
+<tr>
+<td>BP9</td><td>#11</td>
+<td><code>agent-loop.ts:287</code> <code>let messages = context.messages</code></td>
+<td>共命中 4 次（msgCount=1/4/7/10）—— 每轮 LLM 往返后上下文累积 +3（assistant + 2 个 toolResult）</td>
+</tr>
+<tr>
+<td>BP10</td><td>#11</td>
+<td><code>agent-loop.ts:306</code> <code>streamFunction(config.model, llmContext, …)</code></td>
+<td><code>{"model":"deepseek-v4-flash","llmMsgCount":1→13,"toolCount":4,"systemPromptLen":14822}</code> —— llmContext 就绪，系统提示 14822 字符，每轮消息数递增</td>
+</tr>
+<tr>
+<td>BP11</td><td>#12</td>
+<td><code>agent-loop.ts:416</code> <code>const toolCalls = assistantMessage.content.filter(...)</code></td>
+<td>命中 4 次，工具组合 <code>["bash","read"]</code> → <code>["read","bash"]</code> → <code>["bash","read"]</code> → <code>["bash","bash"]</code> —— 模型用 bash 调研仓库、read 读文件，共 8 次工具调用</td>
+</tr>
+</tbody>
+</table>
+
+<div class="win">
+<strong>链路结论（一次真实运行验证）：</strong>
+<code>cli.ts 原始 argv（BP1）→ main 解析（BP2）→ 模式判定 print（BP3）→ 服务组装（BP4）→ Runtime（BP5）→ prompt()（BP6）→ agent.prompt(messages)（BP7）→ runAgentLoop（BP8）→ streamAssistantResponse 每轮（BP9/BP10，共 4 轮模型调用）→ executeToolCalls（BP11，共 8 次工具调用）→ 决策完成退出。</code>
+认证：DeepSeek key 通过环境变量 <code>DEEPSEEK_API_KEY</code> 注入（见 <code>packages/ai/src/providers/deepseek.ts:11</code>），即文档 #13 的"环境变量"凭据路径在本环境生效。
+</div>
+
+<h2>7. 观察技巧</h2>
 <ul>
 <li>大对象用 <code>import { inspect } from "node:util"</code> + <code>console.log(inspect(obj, {depth:3, colors:true}))</code>，调试完删除</li>
 <li>流式事件观察：在 <code>streamAssistantResponse</code> 的 <code>for await</code> 循环体里断点，看 <code>event.type</code> 变化（text_delta → … → done）</li>
 <li>打断点于 <code>agent-session.ts:1108</code> 可同时确认 <code>AgentMessage</code> 结构与第 2 课的 <code>convertToLlm</code> 边界</li>
 </ul>
 
-<h2>5. 本仓库与文档的差异速记</h2>
+<h2>8. 本仓库与文档的差异速记</h2>
 <table>
 <thead>
 <tr><th>文档（v0.80.10）</th><th>本 fork（learn 分支）</th></tr>
