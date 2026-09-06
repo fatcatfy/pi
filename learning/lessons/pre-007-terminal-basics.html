@@ -30,7 +30,7 @@
 <tr><td><code>\x1b[10;5H</code></td><td>光标移到第 10 行第 5 列</td></tr>
 </tbody>
 </table>
-<p>PI 的 TUI（<code>packages/tui</code>）就是计算每一帧该输出哪些字符和哪些转义序列，写到 stdout 上。所谓"差分渲染"就是：只输出相对上一帧变化了的部分，减少写入量、让刷新更顺滑。</p>
+<p>PI 的 TUI（<code>PI/packages/tui</code>）就是计算每一帧该输出哪些字符和哪些转义序列，写到 stdout 上。所谓"差分渲染"就是：只输出相对上一帧变化了的部分，减少写入量、让刷新更顺滑。</p>
 
 <h2>2. stdin / stdout：两个独立的流</h2>
 <p>每个终端程序有三个标准流：</p>
@@ -53,8 +53,8 @@
 
 <h2>4. PI 中相关的代码位置</h2>
 <ul>
-<li><code>packages/tui</code>：终端渲染库（差分渲染、ANSI 输出）</li>
-<li><code>packages/coding-agent/src/modes/interactive/</code>：交互模式，从 stdin 读键、渲染聊天界面</li>
+<li><code>PI/packages/tui</code>：终端渲染库（差分渲染、ANSI 输出）</li>
+<li><code>PI/packages/coding-agent/src/modes/interactive/</code>：交互模式，从 stdin 读键、渲染聊天界面</li>
 </ul>
 <p>读这部分代码时，遇到 <code>process.stdin.setRawMode(true)</code>、<code>\x1b[</code>、<code>process.stdout.write</code> 就不陌生了。</p>
 
@@ -91,8 +91,8 @@
 <div class="footer-nav">
 <p><strong>一手来源（PI 真实代码）：</strong></p>
 <ul>
-<li><code>packages/tui</code>（终端渲染库）</li>
-<li><code>packages/coding-agent/src/modes/interactive/</code>（交互模式）</li>
+<li><code>PI/packages/tui</code>（终端渲染库）</li>
+<li><code>PI/packages/coding-agent/src/modes/interactive/</code>（交互模式）</li>
 </ul>
 <p>这是前置系列最后一门。回 <a href="pre-index.html">前置知识总目录</a> 复习，或回到主系列 <a href="0002-prompt-to-model-call.html">Lesson 2</a> 把这些知识套进真实链路。</p>
 <p>有任何不清楚的地方，直接向老师提问。</p>

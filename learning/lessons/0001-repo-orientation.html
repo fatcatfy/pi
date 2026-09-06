@@ -18,7 +18,7 @@
 
 <h2>1. 一句话：pi 是什么</h2>
 <p>pi（Pi Agent Harness）是一个<strong>极简的终端 AI 编程代理</strong>。你在项目目录里敲 <code>pi</code>，它启动一个交互式终端界面（TUI），由大语言模型驱动，能读文件、改文件、跑命令，把一轮轮的对话组织成可保存、可恢复、可分支的 session（会话）。核心刻意保持小，靠 TypeScript 扩展、skills、prompt 模板和主题来扩展。</p>
-<p>它是"产品"的那部分叫 <strong>coding-agent</strong>；在它下面还垫了两层库（运行时、基础），这三层构成本仓库的全部。<em>（依据：仓库 README 与 <code>packages/coding-agent/docs/index.md</code>）</em></p>
+<p>它是"产品"的那部分叫 <strong>coding-agent</strong>；在它下面还垫了两层库（运行时、基础），这三层构成本仓库的全部。<em>（依据：仓库 README 与 <code>PI/packages/coding-agent/docs/index.md</code>）</em></p>
 
 <h2>2. 三层地图</h2>
 <figure class="diagram">
@@ -65,15 +65,15 @@
 <tr><th>包（目录）</th><th>一句话职责</th><th>学习顺序</th></tr>
 </thead>
 <tbody>
-<tr><td><code>packages/coding-agent</code></td><td>交互式编程代理 CLI（<code>pi</code> 命令）</td><td>第一站（产品面）</td></tr>
-<tr><td><code>packages/agent</code></td><td>agent 运行时：主循环、工具调用、会话状态</td><td>第二站（核心）</td></tr>
-<tr><td><code>packages/ai</code></td><td>统一多家 LLM 供应商 API</td><td>第三站（核心）</td></tr>
-<tr><td><code>packages/session-backends/sqlite-node</code></td><td>会话持久化（SQLite）</td><td>后续</td></tr>
-<tr><td><code>packages/protocol · client · server</code></td><td>JSONL RPC 三件套</td><td>后续</td></tr>
-<tr><td><code>packages/chord</code></td><td>服务 + RPC + 复制状态基础运行时</td><td>后续</td></tr>
-<tr><td><code>packages/tui</code></td><td>终端 UI 渲染库（差分渲染）</td><td>后续</td></tr>
-<tr><td><code>packages/telemetry</code></td><td>遥测契约与参考实现</td><td>后续</td></tr>
-<tr><td><code>packages/evals</code></td><td>benchmark / 评估测试</td><td>暂跳过</td></tr>
+<tr><td><code>PI/packages/coding-agent</code></td><td>交互式编程代理 CLI（<code>pi</code> 命令）</td><td>第一站（产品面）</td></tr>
+<tr><td><code>PI/packages/agent</code></td><td>agent 运行时：主循环、工具调用、会话状态</td><td>第二站（核心）</td></tr>
+<tr><td><code>PI/packages/ai</code></td><td>统一多家 LLM 供应商 API</td><td>第三站（核心）</td></tr>
+<tr><td><code>PI/packages/session-backends/sqlite-node</code></td><td>会话持久化（SQLite）</td><td>后续</td></tr>
+<tr><td><code>PI/packages/protocol · client · server</code></td><td>JSONL RPC 三件套</td><td>后续</td></tr>
+<tr><td><code>PI/packages/chord</code></td><td>服务 + RPC + 复制状态基础运行时</td><td>后续</td></tr>
+<tr><td><code>PI/packages/tui</code></td><td>终端 UI 渲染库（差分渲染）</td><td>后续</td></tr>
+<tr><td><code>PI/packages/telemetry</code></td><td>遥测契约与参考实现</td><td>后续</td></tr>
+<tr><td><code>PI/packages/evals</code></td><td>benchmark / 评估测试</td><td>暂跳过</td></tr>
 </tbody>
 </table>
 <p>真实的构建顺序也等于理解顺序（来自根 <code>package.json</code> 的 build 脚本）：</p>
@@ -83,13 +83,13 @@
 
 <h2>4. 三个"先读这里"</h2>
 <ol>
-<li><strong><code>packages/coding-agent/src/cli.ts</code></strong>（入口）—— <code>package.json</code> 里 <code>"bin": {"pi": "dist/bundle/cli.js"}</code>，源码入口就在 <code>src/cli.ts</code>。想追"敲下 <code>pi</code> 之后发生了什么"就从这里开始。</li>
-<li><strong><code>packages/agent/src/agent-loop.ts</code></strong>（主循环）—— 想理解"agent 是怎么转起来的"，读它。下一课我们会全程走一遍。</li>
-<li><strong><code>packages/coding-agent/docs/index.md</code></strong>（文档索引）—— 26+ 篇文档的总入口。建议顺序：<code>index</code> → <code>quickstart</code> → <code>sessions</code> → <code>extensions</code>。</li>
+<li><strong><code>PI/packages/coding-agent/src/cli.ts</code></strong>（入口）—— <code>package.json</code> 里 <code>"bin": {"pi": "dist/bundle/cli.js"}</code>，源码入口就在 <code>src/cli.ts</code>。想追"敲下 <code>pi</code> 之后发生了什么"就从这里开始。</li>
+<li><strong><code>PI/packages/agent/src/agent-loop.ts</code></strong>（主循环）—— 想理解"agent 是怎么转起来的"，读它。下一课我们会全程走一遍。</li>
+<li><strong><code>PI/packages/coding-agent/docs/index.md</code></strong>（文档索引）—— 26+ 篇文档的总入口。建议顺序：<code>index</code> → <code>quickstart</code> → <code>sessions</code> → <code>extensions</code>。</li>
 </ol>
 
 <div class="warn">
-<strong>别踩的坑：</strong><code>packages/ai/src/models.generated.ts</code> 是一个由脚本生成的超大文件（各家模型的元数据目录），仓库规则明确禁止手改。第一遍读代码时不要从它开始，会被淹没。
+<strong>别踩的坑：</strong><code>PI/packages/ai/src/models.generated.ts</code> 是一个由脚本生成的超大文件（各家模型的元数据目录），仓库规则明确禁止手改。第一遍读代码时不要从它开始，会被淹没。
 </div>
 
 <h2>5. 一条建议的读库路径</h2>
@@ -104,10 +104,10 @@
 <div class="quiz">
 <div class="question" data-explain="正确。coding-agent 才是那个产品形态的包。" data-explain-wrong="想一想：哪个包有 bin 入口、是产品形态？">
 <p class="q">Q1 · <code>pi</code> 命令（CLI 入口）实现在哪个包？</p>
-<button class="option" data-correct="true">packages/coding-agent</button>
-<button class="option" data-correct="false">packages/agent</button>
-<button class="option" data-correct="false">packages/ai</button>
-<button class="option" data-correct="false">packages/chord</button>
+<button class="option" data-correct="true">PI/packages/coding-agent</button>
+<button class="option" data-correct="false">PI/packages/agent</button>
+<button class="option" data-correct="false">PI/packages/ai</button>
+<button class="option" data-correct="false">PI/packages/chord</button>
 <p class="feedback"></p>
 </div>
 
@@ -133,7 +133,7 @@
 <div class="footer-nav">
 <p><strong>推荐的第一手来源：</strong></p>
 <ul>
-<li>官方文档索引（仓库内）：<code>packages/coding-agent/docs/index.md</code></li>
+<li>官方文档索引（仓库内）：<code>PI/packages/coding-agent/docs/index.md</code></li>
 <li>线上文档：<a href="https://pi.dev/docs/latest">pi.dev/docs/latest</a></li>
 <li>项目 README：<code>README.md</code>（根目录）</li>
 <li>词汇表：<a href="../reference/0001-repo-glossary.html">参考 · 仓库术语表</a>（后续所有课共用的词典）</li>

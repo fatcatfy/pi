@@ -17,7 +17,7 @@
 </div>
 
 <h2>1. 一次 LLM 请求长什么样</h2>
-<p>PI 给模型的请求体由 <code>Context</code> 描述（<code>packages/ai/src/types.ts</code>）：</p>
+<p>PI 给模型的请求体由 <code>Context</code> 描述（<code>PI/packages/ai/src/types.ts</code>）：</p>
 <pre><code>export interface Context {
   systemPrompt?: string;   // 系统提示词：定义 agent 的角色与规则
   messages: Message[];     // 对话历史：user / assistant / toolResult 交替
@@ -102,9 +102,9 @@ maxTokens: number;       // 单次输出 token 上限</code></pre>
 <div class="footer-nav">
 <p><strong>一手来源（PI 真实代码）：</strong></p>
 <ul>
-<li><a href="../../packages/ai/src/types.ts" target="_blank" rel="noopener">packages/ai/src/types.ts</a>（Context、Model、ThinkingLevel 类型定义）</li>
-<li><a href="../../packages/agent/src/agent-loop.ts" target="_blank" rel="noopener">packages/agent/src/agent-loop.ts</a>（tool calling 循环、length 截断处理）</li>
-<li><a href="../../packages/agent/src/agent.ts" target="_blank" rel="noopener">packages/agent/src/agent.ts</a>（thinkingLevel、thinkingBudgets）</li>
+<li><a href="../../PI/packages/ai/src/types.ts" target="_blank" rel="noopener">PI/packages/ai/src/types.ts</a>（Context、Model、ThinkingLevel 类型定义）</li>
+<li><a href="../../PI/packages/agent/src/agent-loop.ts" target="_blank" rel="noopener">PI/packages/agent/src/agent-loop.ts</a>（tool calling 循环、length 截断处理）</li>
+<li><a href="../../PI/packages/agent/src/agent.ts" target="_blank" rel="noopener">PI/packages/agent/src/agent.ts</a>（thinkingLevel、thinkingBudgets）</li>
 </ul>
 <p><strong>下一门：</strong><a href="pre-005-git.html">05 · Git</a>——clone、branch、diff、log，读 PI 代码必备。</p>
 <p>回 <a href="pre-index.html">前置知识总目录</a>。有任何不清楚的地方，直接向老师提问。</p>

@@ -17,16 +17,16 @@
 </div>
 
 <h2>1. 什么是 Monorepo</h2>
-<p>一个 git 仓库里放多个 npm 包，而不是一个包一个仓库。PI 就是典型 monorepo：根目录下 <code>packages/agent</code>、<code>packages/ai</code>、<code>packages/coding-agent</code> 等各自是一个独立的 npm 包，但共享同一个 git 历史、同一套构建工具。</p>
+<p>一个 git 仓库里放多个 npm 包，而不是一个包一个仓库。PI 就是典型 monorepo：根目录下 <code>PI/packages/agent</code>、<code>PI/packages/ai</code>、<code>PI/packages/coding-agent</code> 等各自是一个独立的 npm 包，但共享同一个 git 历史、同一套构建工具。</p>
 <p><strong>好处</strong>：跨包改功能时一次提交就能改完、原子化；依赖的包直接用本地源码，不用发布。</p>
 
 <h2>2. workspaces：npm 的 monorepo 机制</h2>
 <p>PI 用 npm workspaces（不需要 lerna/turborepo）。根 <code>package.json</code> 里：</p>
 <pre><code>"workspaces": [
-  "packages/*",
-  "packages/session-backends/*"
+  "PI/packages/*",
+  "PI/packages/session-backends/*"
 ]</code></pre>
-<p>这告诉 npm：<code>packages/</code> 下每个子目录、<code>packages/session-backends/</code> 下每个子目录都是一个 workspace 包。<code>npm install</code> 时，npm 会把这些本地包<strong>用符号链接</strong>连到根 <code>node_modules</code>，所以 <code>@earendil-works/pi-agent-core</code> 实际上指向 <code>packages/agent</code> 的源码——改了源码立刻生效，不用重新发布。</p>
+<p>这告诉 npm：<code>PI/packages/</code> 下每个子目录、<code>PI/packages/session-backends/</code> 下每个子目录都是一个 workspace 包。<code>npm install</code> 时，npm 会把这些本地包<strong>用符号链接</strong>连到根 <code>node_modules</code>，所以 <code>@earendil-works/pi-agent-core</code> 实际上指向 <code>PI/packages/agent</code> 的源码——改了源码立刻生效，不用重新发布。</p>
 
 <h2>3. 包之间的依赖方向（构建顺序）</h2>
 <p>PI 的构建脚本严格按依赖顺序（第 1 课见过）：</p>
@@ -43,7 +43,7 @@
 <tr><td><code>npm install</code></td><td>安装所有依赖（含 workspace 符号链接）</td></tr>
 <tr><td><code>npm run build</code></td><td>按顺序构建所有包</td></tr>
 <tr><td><code>npm run check</code></td><td>类型检查 + lint（PI 改代码后必跑）</td></tr>
-<tr><td><code>npm run dev -w packages/agent</code></td><td>只在某个包里跑 dev</td></tr>
+<tr><td><code>npm run dev -w PI/packages/agent</code></td><td>只在某个包里跑 dev</td></tr>
 </tbody>
 </table>
 <p class="tip"><code>-w</code>（workspace）参数让命令只在指定包里执行。排查单个包问题时常用。</p>

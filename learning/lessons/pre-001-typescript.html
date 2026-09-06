@@ -20,7 +20,7 @@
 <p>TypeScript = JavaScript + 类型标注。类型只在编译时起作用（<em>erasable</em>，擦除后就是纯 JS），运行时不存在。它的核心价值是：<strong>编译器帮你在跑之前抓住"用错了"的错误</strong>。PI 是 100% TS，所以源码里到处都是类型。</p>
 
 <h2>1. 接口 interface：描述对象长什么样</h2>
-<p>PI 用 interface 描述配置对象。来自 <code>packages/agent/src/agent.ts</code>：</p>
+<p>PI 用 interface 描述配置对象。来自 <code>PI/packages/agent/src/agent.ts</code>：</p>
 <pre><code>export interface AgentOptions {
   initialState?: Partial&lt;...&gt;;
   convertToLlm?: (messages: AgentMessage[]) =&gt; Message[];
@@ -129,9 +129,9 @@ if (!tool) { return { kind: "immediate", result: createErrorToolResult(`Tool ${t
 <div class="footer-nav">
 <p><strong>一手来源（PI 真实代码）：</strong></p>
 <ul>
-<li><a href="../../packages/agent/src/agent.ts" target="_blank" rel="noopener">packages/agent/src/agent.ts</a>（interface、satisfies、Promise 类型）</li>
-<li><a href="../../packages/agent/src/agent-loop.ts" target="_blank" rel="noopener">packages/agent/src/agent-loop.ts</a>（可辨识联合、filter 收窄、可选链、instanceof）</li>
-<li><a href="../../packages/agent/src/types.ts" target="_blank" rel="noopener">packages/agent/src/types.ts</a>（泛型工具、StreamFn 定义）</li>
+<li><a href="../../PI/packages/agent/src/agent.ts" target="_blank" rel="noopener">PI/packages/agent/src/agent.ts</a>（interface、satisfies、Promise 类型）</li>
+<li><a href="../../PI/packages/agent/src/agent-loop.ts" target="_blank" rel="noopener">PI/packages/agent/src/agent-loop.ts</a>（可辨识联合、filter 收窄、可选链、instanceof）</li>
+<li><a href="../../PI/packages/agent/src/types.ts" target="_blank" rel="noopener">PI/packages/agent/src/types.ts</a>（泛型工具、StreamFn 定义）</li>
 </ul>
 <p><strong>下一门：</strong><a href="pre-002-async-await-promise.html">02 · async/await 与 Promise</a>——Agent Loop 完全异步，流式响应基于 async iterator。</p>
 <p>回 <a href="pre-index.html">前置知识总目录</a>。有任何不清楚的地方，直接向老师提问。</p>

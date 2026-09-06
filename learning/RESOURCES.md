@@ -2,7 +2,7 @@
 
 ## Knowledge
 
-- [仓库内官方文档首页 — packages/coding-agent/docs/index.md](../packages/coding-agent/docs/index.md)
+- [仓库内官方文档首页 — PI/packages/coding-agent/docs/index.md](../PI/packages/coding-agent/docs/index.md)
   第一手材料。Use for: 任何"pi 是什么 / 怎么跑 / 有什么功能"的问题；全部文档的索引。
 - [线上文档 — pi.dev/docs/latest](https://pi.dev/docs/latest)
   与仓库 docs 同步的线上版。

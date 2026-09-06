@@ -20,7 +20,7 @@ cli.ts → main.ts（参数解析 → appMode → 项目信任）
 
 ## 13 个断点：位置与观察结果
 
-### BP1 CLI 入口 — `packages/coding-agent/src/cli.ts:27`
+### BP1 CLI 入口 — `PI/packages/coding-agent/src/cli.ts:27`
 
 ```ts
 main(process.argv.slice(2));
@@ -33,7 +33,7 @@ main(process.argv.slice(2));
 
 原始参数数组原样进入主流程，未做任何解析。
 
-### BP2 主流程开始 — `packages/coding-agent/src/main.ts:676`
+### BP2 主流程开始 — `PI/packages/coding-agent/src/main.ts:676`
 
 ```ts
 export async function main(args: string[], options?: MainOptions) {
@@ -47,7 +47,7 @@ export async function main(args: string[], options?: MainOptions) {
 | `process.stdin.isTTY` | `true` |
 | `process.stdout.isTTY` | `true` |
 
-### BP2-1 参数解析完成 — `packages/coding-agent/src/main.ts:731`
+### BP2-1 参数解析完成 — `PI/packages/coding-agent/src/main.ts:731`
 
 ```ts
 const parsed = parseArgs(args);   // L721
@@ -64,7 +64,7 @@ time("parseArgs");   // ← 断点
 
 `parseArgs` 将 flag 解析为结构化对象；`projectTrustOverride=true` 直接决定后续项目信任判定。
 
-### BP2-2 appMode 判定 — `packages/coding-agent/src/main.ts:753`
+### BP2-2 appMode 判定 — `PI/packages/coding-agent/src/main.ts:753`
 
 ```ts
 let appMode = resolveAppMode(parsed, process.stdin.isTTY, process.stdout.isTTY);
@@ -80,7 +80,7 @@ const shouldTakeOverStdout = appMode !== "interactive" && ...;   // ← 断点
 
 `resolveAppMode` 优先级：`--mode rpc` > `--mode json` > `-p` 或非 TTY → print > 其余 → interactive。
 
-### BP2-3 项目信任判定 — `packages/coding-agent/src/main.ts:849`（`createRuntime` 工厂内）
+### BP2-3 项目信任判定 — `PI/packages/coding-agent/src/main.ts:849`（`createRuntime` 工厂内）
 
 ```ts
 const projectTrusted = shouldResolveProjectTrust
@@ -99,7 +99,7 @@ const runtimeSettingsManager = SettingsManager.create(cwd, agentDir, { projectTr
 
 `--approve` 使 `projectTrustOverride=true`，跳过信任弹窗直接信任。
 
-### BP3 服务组装 — `packages/coding-agent/src/core/agent-session-services.ts:182`
+### BP3 服务组装 — `PI/packages/coding-agent/src/core/agent-session-services.ts:182`
 
 ```ts
 await modelRuntime.refresh({ allowNetwork: false });   // ← 断点
@@ -116,7 +116,7 @@ await modelRuntime.refresh({ allowNetwork: false });   // ← 断点
 
 三大服务组装完毕后，`modelRuntime.refresh` 触发首次模型目录刷新 —— 认证解析（BP10）在这行执行期间发生。
 
-### BP4 Runtime 创建 — `packages/coding-agent/src/core/agent-session-runtime.ts:431`
+### BP4 Runtime 创建 — `PI/packages/coding-agent/src/core/agent-session-runtime.ts:431`
 
 ```ts
 export async function createAgentSessionRuntime(createRuntime, options) {
@@ -132,7 +132,7 @@ export async function createAgentSessionRuntime(createRuntime, options) {
 | `hasSessionStartEvent` | `false` |
 | `createRuntime` | `"function"` |
 
-### BP5 TUI 创建 — `packages/coding-agent/src/modes/interactive/interactive-mode.ts:521`
+### BP5 TUI 创建 — `PI/packages/coding-agent/src/modes/interactive/interactive-mode.ts:521`
 
 ```ts
 constructor(runtimeHost: AgentSessionRuntime, options: InteractiveModeOptions = {}) {
@@ -150,7 +150,7 @@ constructor(runtimeHost: AgentSessionRuntime, options: InteractiveModeOptions = 
 
 注入成功后，主循环的 `getUserInput()` 直接从队列取输入。
 
-### BP6 主循环 — `packages/coding-agent/src/modes/interactive/interactive-mode.ts:1135`（`run()` 内）
+### BP6 主循环 — `PI/packages/coding-agent/src/modes/interactive/interactive-mode.ts:1135`（`run()` 内）
 
 ```ts
 while (true) {
@@ -166,7 +166,7 @@ while (true) {
 | `inputLen` | `19` |
 | `source` | `"getUserInput"` |
 
-### BP7 消息发送 — `packages/coding-agent/src/core/agent-session.ts:1161`（`prompt()` 内）
+### BP7 消息发送 — `PI/packages/coding-agent/src/core/agent-session.ts:1161`（`prompt()` 内）
 
 ```ts
 const expandPromptTemplates = options?.expandPromptTemplates ?? true;   // L1160
@@ -182,7 +182,7 @@ const preflightResult = options?.preflightResult;   // ← 断点
 | `hasImages` | `false` |
 | `isExtensionCommand` | `false`（非 `/` 开头） |
 
-### BP8 Agent 循环 — `packages/agent/src/agent-loop.ts:104`（`runAgentLoop` 内，★ 核心循环入口）
+### BP8 Agent 循环 — `PI/packages/agent/src/agent-loop.ts:104`（`runAgentLoop` 内，★ 核心循环入口）
 
 ```ts
 export async function runAgentLoop(prompts, context, config, emit, signal, streamFn) {
@@ -197,7 +197,7 @@ export async function runAgentLoop(prompts, context, config, emit, signal, strea
 | `context.tools.length` | `4` |
 | `hasSystemPrompt` | `true` |
 
-### BP9 LLM 调用 — `packages/agent/src/agent-loop.ts:306`（`streamAssistantResponse` 内）
+### BP9 LLM 调用 — `PI/packages/agent/src/agent-loop.ts:306`（`streamAssistantResponse` 内）
 
 ```ts
 const response = await streamFunction(config.model, llmContext, {   // ← 断点
@@ -215,7 +215,7 @@ const response = await streamFunction(config.model, llmContext, {   // ← 断�
 
 BP9 共命中 **6 次**，`llmContext.messages.length` 依次为 `1 → 4 → 7 → 10 → 12 → 14`，对应 1 次首答 + 5 次工具执行后的续答。
 
-### BP10 认证解析 — `packages/coding-agent/src/core/model-runtime.ts:300`（`runAvailabilityRefresh` 内）
+### BP10 认证解析 — `PI/packages/coding-agent/src/core/model-runtime.ts:300`（`runAvailabilityRefresh` 内）
 
 ```ts
 const [available, checks, credentials] = await Promise.all([

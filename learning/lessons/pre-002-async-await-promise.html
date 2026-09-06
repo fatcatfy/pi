@@ -10,7 +10,7 @@
 
 <p class="lesson-number">Prerequisite 02 / ★★★★★</p>
 <h1 class="lesson-title">async/await 与 Promise：读懂 Agent Loop 的异步骨架</h1>
-<p class="meta">约 12 分钟 · 全部来自 <code>packages/agent/src/agent-loop.ts</code> 真实代码 · 目标：能顺着异步调用链追踪一次模型调用</p>
+<p class="meta">约 12 分钟 · 全部来自 <code>PI/packages/agent/src/agent-loop.ts</code> 真实代码 · 目标：能顺着异步调用链追踪一次模型调用</p>
 
 <div class="win">
 <strong>这一课结束你会得到：</strong>看懂 <code>async function</code>、<code>await</code>、<code>for await</code>、<code>Promise.all</code>、<code>AbortSignal</code>——这些正是 Agent Loop 转起来的全部异步机制。
@@ -117,8 +117,8 @@ abort(): void {
 <div class="footer-nav">
 <p><strong>一手来源（PI 真实代码）：</strong></p>
 <ul>
-<li><a href="../../packages/agent/src/agent-loop.ts" target="_blank" rel="noopener">packages/agent/src/agent-loop.ts</a>（async 函数、for await、Promise.all、try/catch）</li>
-<li><a href="../../packages/agent/src/agent.ts" target="_blank" rel="noopener">packages/agent/src/agent.ts</a>（AbortController、runWithLifecycle）</li>
+<li><a href="../../PI/packages/agent/src/agent-loop.ts" target="_blank" rel="noopener">PI/packages/agent/src/agent-loop.ts</a>（async 函数、for await、Promise.all、try/catch）</li>
+<li><a href="../../PI/packages/agent/src/agent.ts" target="_blank" rel="noopener">PI/packages/agent/src/agent.ts</a>（AbortController、runWithLifecycle）</li>
 </ul>
 <p><strong>下一门：</strong><a href="pre-003-node-streams-events.html">03 · Node.js 事件与 Stream</a>——TUI 读 stdin、LLM 响应是 SSE 流、事件总线用 EventEmitter。</p>
 <p>回 <a href="pre-index.html">前置知识总目录</a>。有任何不清楚的地方，直接向老师提问。</p>

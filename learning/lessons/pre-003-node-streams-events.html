@@ -51,7 +51,7 @@ return {
 <p>事件适合"多个地方都关心同一件事"——比如用户切换模型时，好几个 UI 组件都要刷新。</p>
 
 <h2>3. 流：PI 自己实现的 EventStream</h2>
-<p>模型的流式响应不能用事件——它有顺序（token 必须按到达顺序处理），且通常只有一个消费者。PI 写了一个 <code>EventStream</code> 类（<code>packages/ai/src/utils/event-stream.ts</code>）：</p>
+<p>模型的流式响应不能用事件——它有顺序（token 必须按到达顺序处理），且通常只有一个消费者。PI 写了一个 <code>EventStream</code> 类（<code>PI/packages/ai/src/utils/event-stream.ts</code>）：</p>
 <pre><code>export class EventStream&lt;T, R = T&gt; implements AsyncIterable&lt;T&gt; {
   private queue: T[] = [];
   private waiting: ((value: IteratorResult&lt;T&gt;) =&gt; void)[] = [];
@@ -126,9 +126,9 @@ return {
 <div class="footer-nav">
 <p><strong>一手来源（PI 真实代码）：</strong></p>
 <ul>
-<li><a href="../../packages/ai/src/utils/event-stream.ts" target="_blank" rel="noopener">packages/ai/src/utils/event-stream.ts</a>（EventStream 完整实现）</li>
-<li><a href="../../packages/coding-agent/src/core/event-bus.ts" target="_blank" rel="noopener">packages/coding-agent/src/core/event-bus.ts</a>（EventEmitter 封装）</li>
-<li><a href="../../packages/agent/src/agent-loop.ts" target="_blank" rel="noopener">packages/agent/src/agent-loop.ts</a>（for await 消费流）</li>
+<li><a href="../../PI/packages/ai/src/utils/event-stream.ts" target="_blank" rel="noopener">PI/packages/ai/src/utils/event-stream.ts</a>（EventStream 完整实现）</li>
+<li><a href="../../PI/packages/coding-agent/src/core/event-bus.ts" target="_blank" rel="noopener">PI/packages/coding-agent/src/core/event-bus.ts</a>（EventEmitter 封装）</li>
+<li><a href="../../PI/packages/agent/src/agent-loop.ts" target="_blank" rel="noopener">PI/packages/agent/src/agent-loop.ts</a>（for await 消费流）</li>
 </ul>
 <p><strong>下一门：</strong><a href="pre-004-llm-api-concepts.html">04 · LLM API 概念</a>——streaming、tool calling、context window、reasoning。</p>
 <p>回 <a href="pre-index.html">前置知识总目录</a>。有任何不清楚的地方，直接向老师提问。</p>
