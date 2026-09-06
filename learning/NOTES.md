@@ -16,6 +16,7 @@
 - 已建参考：`reference/0003-debug-breakpoints.html`（VS Code 断点调试观察表，13 个断点，行号已对照本仓库验证）
 - 调试实践（2026-09-05）：`.vscode/launch.json` 已创建；发现模型数据缺失坑——需先 `npm --prefix packages/ai run hydrate-model-data` 生成 `.manifest.json`；`npx tsx src/cli.ts --help` 已验证跑通
 - **断点链路实测（2026-09-06）**：沙箱无 VS Code，改用 CDP（`learning/.tmp/pi-cdp-trace.mjs`）直连 `node --inspect-brk` 真实跑通 `pi -p "Summarize this repo" --model deepseek-v4-flash`（DeepSeek key 走 `DEEPSEEK_API_KEY` 环境变量）。11 个断点全部命中并取到变量数据；关键坑：esbuild 把代码压缩成 3~10 行，行断点全落模块顶部 → 必须用内联 sourcemap + `generatedPositionFor(LEAST_UPPER_BOUND)` 映射到精确 line:column，且断点打在函数体首条语句（打在声明行则参数未绑定）。完整结果已并入 `reference/0003-debug-breakpoints.html` 第 6 节，原始数据 `learning/.tmp/pi-cdp-trace.jsonl`
+- **断点链路实测 2（2026-09-06，Interactive 模式）**：按用户指定 10 站结构（CLI 入口→主流程→服务组装→Runtime→TUI→主循环→消息发送→Agent 循环→LLM 调用→认证解析）重跑，用 `script -qec` 伪终端 + `--approve` 跳过信任弹窗，在 InteractiveMode 构造函数注入 `pendingUserInputs` 实现无人工交互。10 个断点全部命中，`DEEPSEEK_API_KEY` 解析成功，模型完整回答。认证解析（BP10）实际发生在服务组装 BP3 的 `modelRuntime.refresh` 期间（311 次命中），非链路最后一步；工具使用使 LLM 调用 BP9 命中 5 次（消息数 1→13）。报告：`reference/0006-breakpoint-observation-report.md`，原始数据 `learning/.tmp/pi-cdp-trace.jsonl`
 - 下一课候选：`0003` 工具调用深入（read/write/bash 实现、before/afterToolCall 钩子）
 - **前置知识系列（pre-*）**已完成 7 门，全部锚定 PI 真实代码：
   - `pre-index.html` 总目录（按 ★ 排序）
