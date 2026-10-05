@@ -1,5 +1,6 @@
 import type { Context } from "@earendil-works/chord";
 import { type Static, Type } from "typebox";
+import { defineTool } from "../harness/define.ts";
 import type { ToolExecutionApi, ToolRegistration } from "../harness/types.ts";
 import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES } from "../truncate.ts";
 import { requireEnv } from "./env.ts";
@@ -39,18 +40,19 @@ function validateTimeout(timeout: number | undefined): void {
 
 /**
  * Runs a command through the environment's shell. Its output streams to `api.output()`, where the Harness keeps the
- * tail within the default limits; the result content is that retained output. Output beyond the limits is spilled to a
+ * tail within the default limits; the result content is that retained output. The retained window goes to the
+ * environment, which may omit output outside it and report how much it omitted, so dropped counts stay exact. Output beyond the limits is spilled to a
  * file whose path is reported as a diagnostic. A nonzero exit or timeout throws, which makes an error result that still
  * carries the output and diagnostics.
  */
-export function createBashTool(options?: BashToolOptions): ToolRegistration {
-	return {
+export function createBashTool(options?: BashToolOptions): ToolRegistration<typeof bashSchema> {
+	return defineTool({
 		name: "bash",
 		description: `Execute a bash command in the current working directory. Returns combined stdout and stderr. Output is truncated to last ${DEFAULT_MAX_LINES} lines or ${DEFAULT_MAX_BYTES / 1024}KB (whichever is hit first). If truncated, full output is saved to a temp file. Optionally provide a timeout in seconds.`,
 		parameters: bashSchema,
 		outputLimits: { retain: "tail" },
 		async execute(args, api, context) {
-			const { command, timeout } = args as BashToolInput;
+			const { command, timeout } = args;
 			validateTimeout(timeout);
 			const env = requireEnv(api);
 			const execution: BashExecution = {
@@ -67,8 +69,10 @@ export function createBashTool(options?: BashToolOptions): ToolRegistration {
 					env: execution.env,
 					inheritEnv: execution.inheritEnv,
 					...(timeout === undefined ? {} : { timeout }),
-					onOutput: (text) => api.output(text),
+					onOutput: (text, _context, info) => api.output(text, info.skipped),
 					spill: { afterBytes: DEFAULT_MAX_BYTES, afterLines: DEFAULT_MAX_LINES },
+					// An environment may then omit output outside the retained tail and report the omission.
+					...(api.outputWindow === undefined ? {} : { window: api.outputWindow }),
 				},
 				context,
 			);
@@ -85,5 +89,5 @@ export function createBashTool(options?: BashToolOptions): ToolRegistration {
 			if (result.value.exitCode !== 0) throw new Error(`Command exited with code ${result.value.exitCode}`);
 			return {};
 		},
-	};
+	});
 }

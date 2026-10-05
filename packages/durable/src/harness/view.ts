@@ -14,10 +14,11 @@ import type {
 	Storage,
 	WatchHandle,
 } from "../types.ts";
-import { ConversationConfig } from "./config.ts";
+import { AgentDoc } from "./agent.ts";
 import { activeEntries, captureContextBounds } from "./context.ts";
 import { InboxDoc } from "./inbox.ts";
 import { LiveDoc } from "./live.ts";
+import { ProviderDoc } from "./provider.ts";
 import { UsageDoc } from "./usage.ts";
 import { closedError } from "./util.ts";
 
@@ -26,7 +27,7 @@ export type ConversationView = {
 	readonly conversation: ConversationRecord;
 	/** Raw active entries, as `ContextView.entries`: the head marker, then the non-head entries from its head. */
 	readonly entries: readonly EntryRecord[];
-	/** `pi.conversation.config`, `pi.live`, `pi.inbox`, and `pi.usage`, keyed by kind; absent documents are absent. */
+	/** Built-in conversation documents keyed by kind; absent documents are absent. */
 	readonly docs: Readonly<Record<string, JsonObject>>;
 };
 
@@ -45,9 +46,10 @@ export type ViewObserver = {
 };
 
 const MOUNTED = [
-	ConversationConfig,
+	AgentDoc,
 	LiveDoc,
 	InboxDoc,
+	ProviderDoc,
 	UsageDoc,
 ] as unknown as readonly ConversationDocToken<JsonObject>[];
 const MOUNTED_KINDS: ReadonlySet<string> = new Set(MOUNTED.map((token) => token.definition.kind));
@@ -127,24 +129,25 @@ export class ConversationViews {
 
 	/**
 	 * Register an observer created from the current revision, atomically on the Session line: it sees every later
-	 * publication and nothing earlier. `release` drops it, and the mount with its last observer.
+	 * publication and nothing earlier. `create` may read committed Storage, still on the line. `release` drops it, and
+	 * the mount with its last observer.
 	 */
 	attach<O extends ViewObserver>(
 		id: ConversationId,
-		create: (value: ConversationView, release: () => void) => O,
+		create: (value: ConversationView, release: () => void, storage: Storage) => O | Promise<O>,
 		context: Context,
 	): Promise<{ observer: O; detach: () => void }> {
 		return this.#session.readOnLine(async () => {
 			const mount = this.#mounts.get(id) ?? (await this.#build(id, context));
-			// Close or cancellation may begin while the mount hydrates; register nothing then.
-			if (this.#closed) throw closedError();
-			context.abortSignal?.throwIfAborted();
-			this.#mounts.set(id, mount);
 			const detach = (): void => {
 				mount.observers.delete(observer);
 				if (mount.observers.size === 0 && this.#mounts.get(id) === mount) this.#mounts.delete(id);
 			};
-			const observer = create(mount.value, detach);
+			const observer = await create(mount.value, detach, this.#storage);
+			// Close or cancellation may begin while the mount hydrates; register nothing then.
+			if (this.#closed) throw closedError();
+			context.abortSignal?.throwIfAborted();
+			this.#mounts.set(id, mount);
 			mount.observers.add(observer);
 			return { observer, detach };
 		});

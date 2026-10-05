@@ -13,11 +13,11 @@ const packages = [
 	{ directory: "packages/mcp", name: "@earendil-works/pi-mcp" },
 	{ directory: "packages/ai", name: "@earendil-works/pi-ai" },
 	{ directory: "packages/durable", name: "@earendil-works/pi-durable" },
+	{ directory: "packages/env", name: "@earendil-works/pi-env" },
 	{ directory: "packages/tui", name: "@earendil-works/pi-tui" },
 	{ directory: "packages/agent", name: "@earendil-works/pi-agent-core" },
 	{ directory: "packages/protocol", name: "@earendil-works/pi-protocol" },
 	{ directory: "packages/client", name: "@earendil-works/pi-client" },
-	{ directory: "packages/session-backends/sqlite-node", name: "@earendil-works/pi-session-backend-sqlite-node" },
 	{ directory: "packages/server", name: "@earendil-works/pi-server" },
 	{ directory: "packages/coding-agent", name: "@earendil-works/pi-coding-agent" },
 ];
